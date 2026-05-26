@@ -1,11 +1,16 @@
 import {
+  AbortMultipartUploadCommand,
+  CompleteMultipartUploadCommand,
   CopyObjectCommand,
+  CreateMultipartUploadCommand,
   DeleteObjectsCommand,
   GetObjectCommand,
   ListBucketsCommand,
   ListObjectsV2Command,
+  ListPartsCommand,
   PutObjectCommand,
   S3Client,
+  UploadPartCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import type {
@@ -264,25 +269,95 @@ export async function presignDownloadUrl(
 }
 
 /**
- * Presigned PUT — the browser uploads directly to S3. Single-PUT cap is 5 GB;
- * larger files would need multipart, which we'd add via @aws-sdk/lib-storage
- * later if needed. v1 enforces the cap on the client.
+ * Mint a presigned PUT URL for a single-shot upload. The browser does the
+ * actual data transfer directly to the S3 backend — this server never sees the
+ * bytes. ContentType is deliberately NOT included in the signed headers so the
+ * browser can send whatever Content-Type it likes (typically the File's own
+ * `.type`) without invalidating the signature; S3 stores whatever the PUT sent.
+ *
+ * Same TTL as downloads (15 min). Single-PUT uploads finish within that for
+ * any reasonable size; larger files take the multipart path with per-part
+ * presigning.
  */
-export async function presignUploadUrl(
+export async function presignSingleUpload(
   conn: S3Connection,
   bucket: string,
   key: string,
-  contentType: string | undefined,
   expiresSeconds: number = PRESIGN_TTL_SECONDS
 ): Promise<PresignedUrl> {
   const client = createS3Client(conn);
   try {
     const url = await getSignedUrl(
       client,
-      new PutObjectCommand({
+      new PutObjectCommand({ Bucket: bucket, Key: key }),
+      { expiresIn: expiresSeconds }
+    );
+    return {
+      url,
+      expiresAt: new Date(Date.now() + expiresSeconds * 1000).toISOString(),
+    };
+  } finally {
+    client.destroy();
+  }
+}
+
+// ─── Multipart upload ─────────────────────────────────────────────────────────
+//
+// Standard S3 multipart flow:
+//   1) CreateMultipartUpload  → returns an UploadId
+//   2) UploadPart × N         → returns an ETag per part (5 MB min, except last)
+//   3) CompleteMultipartUpload(parts: [{PartNumber, ETag}, ...])
+//   3') AbortMultipartUpload  → discard parts and free server-side state
+//
+// This is what unlocks browser-side resume: parts that landed on S3 stay on
+// S3 between page reloads. The browser persists {uploadId, completedParts}
+// in localStorage and on resume calls ListParts to verify what's still there.
+
+export async function createMultipartUpload(
+  conn: S3Connection,
+  bucket: string,
+  key: string,
+  contentType: string | undefined
+): Promise<{ uploadId: string }> {
+  const client = createS3Client(conn);
+  try {
+    const out = await client.send(
+      new CreateMultipartUploadCommand({
         Bucket: bucket,
         Key: key,
         ContentType: contentType,
+      })
+    );
+    if (!out.UploadId) throw new Error("Backend did not return UploadId");
+    return { uploadId: out.UploadId };
+  } finally {
+    client.destroy();
+  }
+}
+
+/**
+ * Mint a presigned PUT URL for one part of an in-progress multipart upload.
+ * Browser PUTs the part body to this URL directly; the backend returns the
+ * ETag via response headers (CORS exposes it). One mint per part — cheap
+ * (pure SigV4 computation, no network) and parallelizes with the part pool.
+ */
+export async function presignUploadPart(
+  conn: S3Connection,
+  bucket: string,
+  key: string,
+  uploadId: string,
+  partNumber: number,
+  expiresSeconds: number = PRESIGN_TTL_SECONDS
+): Promise<PresignedUrl> {
+  const client = createS3Client(conn);
+  try {
+    const url = await getSignedUrl(
+      client,
+      new UploadPartCommand({
+        Bucket: bucket,
+        Key: key,
+        UploadId: uploadId,
+        PartNumber: partNumber,
       }),
       { expiresIn: expiresSeconds }
     );
@@ -290,6 +365,98 @@ export async function presignUploadUrl(
       url,
       expiresAt: new Date(Date.now() + expiresSeconds * 1000).toISOString(),
     };
+  } finally {
+    client.destroy();
+  }
+}
+
+/**
+ * List the parts the backend has already received for an in-progress upload.
+ * Used at resume time to skip already-uploaded parts.
+ */
+export async function listMultipartParts(
+  conn: S3Connection,
+  bucket: string,
+  key: string,
+  uploadId: string
+): Promise<{ partNumber: number; etag: string; size: number }[]> {
+  const client = createS3Client(conn);
+  try {
+    const parts: { partNumber: number; etag: string; size: number }[] = [];
+    let marker: string | undefined;
+    for (;;) {
+      const out = await client.send(
+        new ListPartsCommand({
+          Bucket: bucket,
+          Key: key,
+          UploadId: uploadId,
+          PartNumberMarker: marker,
+        })
+      );
+      for (const p of out.Parts ?? []) {
+        if (p.PartNumber != null && p.ETag && p.Size != null) {
+          parts.push({
+            partNumber: p.PartNumber,
+            etag: p.ETag,
+            size: p.Size,
+          });
+        }
+      }
+      if (!out.IsTruncated || !out.NextPartNumberMarker) break;
+      marker = out.NextPartNumberMarker;
+    }
+    return parts;
+  } finally {
+    client.destroy();
+  }
+}
+
+export async function completeMultipartUpload(
+  conn: S3Connection,
+  bucket: string,
+  key: string,
+  uploadId: string,
+  parts: { partNumber: number; etag: string }[]
+): Promise<{ etag: string | undefined; location: string | undefined }> {
+  const client = createS3Client(conn);
+  try {
+    // S3 requires Parts in strictly ascending PartNumber order — defend
+    // against a client that hands us the array out of order.
+    const sorted = [...parts].sort((a, b) => a.partNumber - b.partNumber);
+    const out = await client.send(
+      new CompleteMultipartUploadCommand({
+        Bucket: bucket,
+        Key: key,
+        UploadId: uploadId,
+        MultipartUpload: {
+          Parts: sorted.map((p) => ({
+            PartNumber: p.partNumber,
+            ETag: p.etag,
+          })),
+        },
+      })
+    );
+    return { etag: out.ETag, location: out.Location };
+  } finally {
+    client.destroy();
+  }
+}
+
+export async function abortMultipartUpload(
+  conn: S3Connection,
+  bucket: string,
+  key: string,
+  uploadId: string
+): Promise<void> {
+  const client = createS3Client(conn);
+  try {
+    await client.send(
+      new AbortMultipartUploadCommand({
+        Bucket: bucket,
+        Key: key,
+        UploadId: uploadId,
+      })
+    );
   } finally {
     client.destroy();
   }

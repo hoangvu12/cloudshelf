@@ -6,12 +6,16 @@
  *        SPA from ./dist on the same port.
  *
  * Architecture (so future-me doesn't forget):
- *   - The browser NEVER talks to S3 directly.
- *   - Browser → this server's /api/* → AWS SDK → S3-compatible endpoint.
- *   - Credentials live in ./data/cloudshelf.db (SQLite). Plaintext is fine because
- *     this app is single-user, local-use only (mirrors C0RE1312/s3-compass).
- *   - File transfers eventually go via pre-signed URLs (browser → S3 direct,
- *     signed by us) to avoid streaming gigabytes through this process.
+ *   - Control plane (list buckets/objects, copy, delete, create folder,
+ *     multipart start/list/complete/abort) goes browser → this server → AWS SDK
+ *     → S3-compatible endpoint. Small JSON responses, no body streaming.
+ *   - Data plane (single PUT, each multipart part) goes browser → S3 directly
+ *     via presigned URLs minted here. Bytes never touch this process — that's
+ *     what gives us honest progress, real error surfaces, and no bandwidth
+ *     doubling. Requires the backend to send permissive CORS (telegram-s3
+ *     does; bucket-level CORS for AWS/R2/MinIO is a one-time setup).
+ *   - Credentials live in ./data/cloudshelf.db (SQLite). Plaintext is fine
+ *     because this app is single-user, local-use only.
  */
 
 import { Hono } from "hono";

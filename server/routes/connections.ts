@@ -8,13 +8,18 @@ import {
   deleteConnection,
 } from "../db.ts";
 import {
+  abortMultipartUpload,
+  completeMultipartUpload,
   copyObjectForConnection,
   createFolderForConnection,
+  createMultipartUpload,
   deleteObjectsForConnection,
   listBucketsForConnection,
+  listMultipartParts,
   listObjectsForConnection,
   presignDownloadUrl,
-  presignUploadUrl,
+  presignSingleUpload,
+  presignUploadPart,
   probeConnection,
 } from "../lib/s3.ts";
 import type { S3Connection } from "../types.ts";
@@ -126,10 +131,6 @@ const copySchema = z.object({
   sourceKey: z.string().min(1),
   destKey: z.string().min(1),
 });
-const uploadUrlSchema = z.object({
-  key: z.string().min(1),
-  contentType: z.string().optional(),
-});
 
 /** Wrap an upstream S3 call so failures surface as a uniform 502 envelope. */
 function upstreamError(err: unknown) {
@@ -236,24 +237,198 @@ connectionsRoute.get("/:id/buckets/:bucket/objects/download-url", async (c) => {
   }
 });
 
-/** Presigned PUT URL — browser uploads directly to S3 (single PUT, ≤5 GB). */
-connectionsRoute.post("/:id/buckets/:bucket/objects/upload-url", async (c) => {
-  const conn = getConnection(c.req.param("id"));
-  if (!conn) return c.json({ error: "Not found" }, 404);
-  const body = await c.req.json().catch(() => null);
-  const parsed = uploadUrlSchema.safeParse(body);
-  if (!parsed.success) {
-    return c.json({ error: "Invalid payload", detail: parsed.error.message }, 400);
-  }
-  try {
-    const out = await presignUploadUrl(
-      conn,
-      c.req.param("bucket"),
-      parsed.data.key,
-      parsed.data.contentType
-    );
-    return c.json(out);
-  } catch (err) {
-    return c.json(upstreamError(err), 502);
-  }
+// ─── Multipart upload (resumable) ───────────────────────────────────────────
+// Client orchestrates: POST /multipart/start → PUT /multipart/part × N →
+// POST /multipart/complete. Cancel = DELETE /multipart. Resume = GET
+// /multipart/parts then upload only missing partNumbers. Key + uploadId ride
+// in query string on every per-part request so the server stays stateless
+// w.r.t. the upload session (the source of truth is the backend's own
+// CreateMultipartUpload state).
+
+const multipartStartSchema = z.object({
+  key: z.string().min(1),
+  contentType: z.string().optional(),
 });
+
+const multipartCompleteSchema = z.object({
+  parts: z
+    .array(
+      z.object({
+        partNumber: z.number().int().min(1).max(10000),
+        etag: z.string().min(1),
+      })
+    )
+    .min(1),
+});
+
+connectionsRoute.post(
+  "/:id/buckets/:bucket/objects/multipart/start",
+  async (c) => {
+    const conn = getConnection(c.req.param("id"));
+    if (!conn) return c.json({ error: "Not found" }, 404);
+    const body = await c.req.json().catch(() => null);
+    const parsed = multipartStartSchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json(
+        { error: "Invalid payload", detail: parsed.error.message },
+        400
+      );
+    }
+    try {
+      const out = await createMultipartUpload(
+        conn,
+        c.req.param("bucket"),
+        parsed.data.key,
+        parsed.data.contentType
+      );
+      return c.json({ uploadId: out.uploadId, key: parsed.data.key });
+    } catch (err) {
+      return c.json(upstreamError(err), 502);
+    }
+  }
+);
+
+/**
+ * Mint a presigned PUT URL for one part. Browser PUTs the part body directly
+ * to the S3 backend using this URL — bytes never touch this server. Cheap to
+ * call (pure SigV4 math, no upstream request), so the worker mints on demand
+ * per part rather than pre-batching.
+ */
+connectionsRoute.post(
+  "/:id/buckets/:bucket/objects/presign/part",
+  async (c) => {
+    const conn = getConnection(c.req.param("id"));
+    if (!conn) return c.json({ error: "Not found" }, 404);
+    const uploadId = c.req.query("uploadId");
+    const key = c.req.query("key");
+    const partNumberStr = c.req.query("partNumber");
+    if (!uploadId || !key || !partNumberStr) {
+      return c.json(
+        { error: "Missing ?uploadId, ?key, or ?partNumber" },
+        400
+      );
+    }
+    const partNumber = Number(partNumberStr);
+    if (
+      !Number.isInteger(partNumber) ||
+      partNumber < 1 ||
+      partNumber > 10000
+    ) {
+      return c.json({ error: "partNumber must be 1..10000" }, 400);
+    }
+    try {
+      const out = await presignUploadPart(
+        conn,
+        c.req.param("bucket"),
+        key,
+        uploadId,
+        partNumber
+      );
+      return c.json(out);
+    } catch (err) {
+      return c.json(upstreamError(err), 502);
+    }
+  }
+);
+
+connectionsRoute.get(
+  "/:id/buckets/:bucket/objects/multipart/parts",
+  async (c) => {
+    const conn = getConnection(c.req.param("id"));
+    if (!conn) return c.json({ error: "Not found" }, 404);
+    const uploadId = c.req.query("uploadId");
+    const key = c.req.query("key");
+    if (!uploadId || !key) {
+      return c.json({ error: "Missing ?uploadId or ?key" }, 400);
+    }
+    try {
+      const parts = await listMultipartParts(
+        conn,
+        c.req.param("bucket"),
+        key,
+        uploadId
+      );
+      return c.json({ parts });
+    } catch (err) {
+      return c.json(upstreamError(err), 502);
+    }
+  }
+);
+
+connectionsRoute.post(
+  "/:id/buckets/:bucket/objects/multipart/complete",
+  async (c) => {
+    const conn = getConnection(c.req.param("id"));
+    if (!conn) return c.json({ error: "Not found" }, 404);
+    const uploadId = c.req.query("uploadId");
+    const key = c.req.query("key");
+    if (!uploadId || !key) {
+      return c.json({ error: "Missing ?uploadId or ?key" }, 400);
+    }
+    const body = await c.req.json().catch(() => null);
+    const parsed = multipartCompleteSchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json(
+        { error: "Invalid payload", detail: parsed.error.message },
+        400
+      );
+    }
+    try {
+      const out = await completeMultipartUpload(
+        conn,
+        c.req.param("bucket"),
+        key,
+        uploadId,
+        parsed.data.parts
+      );
+      return c.json({ ok: true, key, etag: out.etag, location: out.location });
+    } catch (err) {
+      return c.json(upstreamError(err), 502);
+    }
+  }
+);
+
+connectionsRoute.delete(
+  "/:id/buckets/:bucket/objects/multipart",
+  async (c) => {
+    const conn = getConnection(c.req.param("id"));
+    if (!conn) return c.json({ error: "Not found" }, 404);
+    const uploadId = c.req.query("uploadId");
+    const key = c.req.query("key");
+    if (!uploadId || !key) {
+      return c.json({ error: "Missing ?uploadId or ?key" }, 400);
+    }
+    try {
+      await abortMultipartUpload(
+        conn,
+        c.req.param("bucket"),
+        key,
+        uploadId
+      );
+      return c.json({ ok: true });
+    } catch (err) {
+      return c.json(upstreamError(err), 502);
+    }
+  }
+);
+
+/**
+ * Mint a presigned PUT URL for a single-shot upload (files under the
+ * multipart threshold). Same rationale as /presign/part: data goes browser →
+ * S3 directly, with real progress events and no proxy bandwidth.
+ */
+connectionsRoute.post(
+  "/:id/buckets/:bucket/objects/presign/upload",
+  async (c) => {
+    const conn = getConnection(c.req.param("id"));
+    if (!conn) return c.json({ error: "Not found" }, 404);
+    const key = c.req.query("key");
+    if (!key) return c.json({ error: "Missing ?key=" }, 400);
+    try {
+      const out = await presignSingleUpload(conn, c.req.param("bucket"), key);
+      return c.json(out);
+    } catch (err) {
+      return c.json(upstreamError(err), 502);
+    }
+  }
+);

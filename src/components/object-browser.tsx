@@ -1,5 +1,6 @@
 import * as React from "react";
 import { useNavigate } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { FolderX, ServerCrash, UploadCloud } from "lucide-react";
 
@@ -34,17 +35,19 @@ import {
 } from "@/lib/object-sort";
 import {
   fetchDownloadUrl,
-  fetchUploadUrl,
+  objectKeys,
   useCopyObject,
   useCreateFolder,
   useDeleteObjects,
   useObjects,
 } from "@/lib/api/objects";
 import { useSelectionStore } from "@/stores/selection";
+import { onUploadCompleted, useUploadsStore } from "@/stores/uploads";
 import type { S3Entry, S3ObjectEntry } from "@server/types";
 
-/** Single-PUT cap from S3. Larger files would need multipart, which is v2. */
-const MAX_SINGLE_PUT_BYTES = 5 * 1024 ** 3;
+/** S3's per-object size ceiling. The worker auto-splits anything over the
+ *  multipart threshold so we don't need a separate single-PUT cap. */
+const MAX_UPLOAD_BYTES = 5 * 1024 ** 4;
 
 /**
  * The object browser screen: breadcrumb + morphing toolbar + virtualized list,
@@ -66,6 +69,7 @@ export function ObjectBrowser({
   prefix: string;
 }) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const query = useObjects(connectionId, bucket, prefix);
 
   const selectedIds = useSelectionStore((s) => s.selected);
@@ -280,56 +284,40 @@ export function ObjectBrowser({
   };
 
   // ─── Upload flow ────────────────────────────────────────────────────────
-  const handleUploadFiles = async (files: File[]) => {
-    const oversized = files.filter((f) => f.size > MAX_SINGLE_PUT_BYTES);
+  // The browser doesn't do the upload anymore — it enqueues into the global
+  // upload store and the floating UploadPanel handles progress, retries,
+  // cancellation. We only listen for completions targeting *our* current
+  // prefix to invalidate the listing.
+  const normalizedPrefix = normalizePrefix(prefix);
+
+  React.useEffect(() => {
+    return onUploadCompleted((item) => {
+      if (
+        item.connectionId === connectionId &&
+        item.bucket === bucket &&
+        item.prefix === normalizedPrefix
+      ) {
+        queryClient.invalidateQueries({
+          queryKey: objectKeys.list(connectionId, bucket, prefix),
+        });
+      }
+    });
+  }, [connectionId, bucket, prefix, normalizedPrefix, queryClient]);
+
+  const handleUploadFiles = (files: File[]) => {
+    const oversized = files.filter((f) => f.size > MAX_UPLOAD_BYTES);
     if (oversized.length) {
       toast.error(
-        `${oversized.length} file${oversized.length === 1 ? "" : "s"} exceed the 5 GB single-PUT limit`,
-        { description: "Multipart uploads aren't supported yet." }
+        `${oversized.length} file${oversized.length === 1 ? "" : "s"} exceed S3's 5 TB per-object limit`
       );
     }
-    const accepted = files.filter((f) => f.size <= MAX_SINGLE_PUT_BYTES);
+    const accepted = files.filter((f) => f.size <= MAX_UPLOAD_BYTES);
     if (accepted.length === 0) return;
 
-    const toastId = toast.loading(
-      `Uploading ${accepted.length} file${accepted.length === 1 ? "" : "s"}...`
+    useUploadsStore.getState().actions.addFiles(
+      { connectionId, bucket, prefix: normalizedPrefix },
+      accepted
     );
-    let succeeded = 0;
-    let failed = 0;
-
-    for (const file of accepted) {
-      try {
-        const key = `${normalizePrefix(prefix)}${file.name}`;
-        const { url } = await fetchUploadUrl(connectionId, bucket, {
-          key,
-          contentType: file.type || undefined,
-        });
-        const res = await fetch(url, {
-          method: "PUT",
-          headers: file.type ? { "content-type": file.type } : undefined,
-          body: file,
-        });
-        if (!res.ok) throw new Error(`Upload failed: HTTP ${res.status}`);
-        succeeded += 1;
-      } catch (e) {
-        failed += 1;
-        console.error("Upload failed for", file.name, e);
-      }
-    }
-
-    toast.dismiss(toastId);
-    if (failed === 0) {
-      toast.success(`Uploaded ${succeeded} file${succeeded === 1 ? "" : "s"}`);
-    } else if (succeeded > 0) {
-      toast.warning(`Uploaded ${succeeded}, ${failed} failed`);
-    } else {
-      toast.error(`Failed to upload ${failed} file${failed === 1 ? "" : "s"}`, {
-        description:
-          "If this is the first upload, make sure the bucket allows CORS PUT from this origin.",
-      });
-    }
-
-    query.refetch();
   };
 
   // ─── Dialog confirmation handlers ───────────────────────────────────────

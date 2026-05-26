@@ -150,14 +150,3 @@ export function fetchDownloadUrl(
   );
 }
 
-/** One-shot helper used by the upload flow to mint a PUT URL per file. */
-export function fetchUploadUrl(
-  connectionId: string,
-  bucket: string,
-  input: { key: string; contentType?: string }
-): Promise<PresignedUrl> {
-  return apiFetch<PresignedUrl>(
-    `${basePath(connectionId, bucket)}/objects/upload-url`,
-    { method: "POST", body: input }
-  );
-}
