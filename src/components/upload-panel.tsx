@@ -131,7 +131,7 @@ export function UploadPanel() {
   }
 
   return (
-    <div className="themed-scope pointer-events-none fixed bottom-6 right-6 z-50 w-full max-w-[28rem] sm:max-w-[32rem]">
+    <div className="themed-scope pointer-events-none fixed inset-x-3 bottom-3 z-50 sm:inset-x-auto sm:right-6 sm:bottom-6 sm:w-full sm:max-w-[28rem] md:max-w-[32rem]">
       <div className="bg-background/95 border-surface-1 text-foreground pointer-events-auto flex flex-col overflow-hidden rounded-xl border shadow-[0_25px_50px_-12px_rgba(0,0,0,0.8)] backdrop-blur-xl animate-in fade-in-0 slide-in-from-bottom-2 duration-200 ease-out">
         <Header
           done={data.done}
@@ -771,11 +771,11 @@ function MinimizedPanel({
     ? `All ${total} uploaded`
     : `Uploading ${active} of ${active + queued}`;
   return (
-    <div className="themed-scope pointer-events-none fixed bottom-6 right-6 z-50">
+    <div className="themed-scope pointer-events-none fixed inset-x-3 bottom-3 z-50 sm:inset-x-auto sm:right-6 sm:bottom-6">
       <button
         type="button"
         onClick={onExpand}
-        className="bg-background/95 border-surface-1 hover:border-muted-foreground text-foreground pointer-events-auto flex w-72 items-center gap-3 rounded-full border px-4 py-2 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.8)] backdrop-blur-xl transition-colors animate-in fade-in-0 slide-in-from-bottom-2 duration-200 ease-out"
+        className="bg-background/95 border-surface-1 hover:border-muted-foreground text-foreground pointer-events-auto flex w-full items-center gap-3 rounded-full border px-4 py-2 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.8)] backdrop-blur-xl transition-colors animate-in fade-in-0 slide-in-from-bottom-2 duration-200 ease-out sm:w-72"
       >
         <div className="relative flex size-6 shrink-0 items-center justify-center">
           <svg className="size-6 -rotate-90" viewBox="0 0 24 24">
