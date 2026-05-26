@@ -30,6 +30,7 @@ export function ObjectToolbar({
   totalBytes,
   filter,
   onFilterChange,
+  filterInputRef,
   onUpload,
   onNewFolder,
   onClearSelection,
@@ -47,6 +48,8 @@ export function ObjectToolbar({
   totalBytes: number;
   filter: string;
   onFilterChange: (next: string) => void;
+  /** Exposed so the `/` shortcut can focus this input from the page level. */
+  filterInputRef?: React.Ref<HTMLInputElement>;
   onUpload: () => void;
   onNewFolder: () => void;
   onClearSelection: () => void;
@@ -140,7 +143,11 @@ export function ObjectToolbar({
             </ActionButton>
           </div>
         ) : (
-          <FilterInput value={filter} onChange={onFilterChange} />
+          <FilterInput
+            value={filter}
+            onChange={onFilterChange}
+            inputRef={filterInputRef}
+          />
         )}
 
         {!isSelectionMode && (
@@ -158,14 +165,17 @@ export function ObjectToolbar({
 function FilterInput({
   value,
   onChange,
+  inputRef,
 }: {
   value: string;
   onChange: (next: string) => void;
+  inputRef?: React.Ref<HTMLInputElement>;
 }) {
   return (
     <div className="relative hidden sm:block">
       <Search className="text-ctp-subtext absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2" />
       <input
+        ref={inputRef}
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}

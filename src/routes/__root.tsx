@@ -11,18 +11,21 @@ import { UploadPanel } from "@/components/upload-panel";
 import { Loader2 } from "@/lib/icons";
 import { ApiClientError } from "@/lib/api/client";
 import { useMe } from "@/lib/api/auth";
+import { ShortcutsDialog, useShortcutsHelp } from "@/lib/shortcuts";
 
 export const Route = createRootRoute({
   component: RootLayout,
 });
 
 function RootLayout() {
+  const [helpOpen, setHelpOpen] = useShortcutsHelp();
   return (
     <TooltipProvider delayDuration={150}>
       <AuthGate>
         <Outlet />
         {/* Lives at the root so in-flight uploads survive navigation between buckets/prefixes. */}
         <UploadPanel />
+        <ShortcutsDialog open={helpOpen} onOpenChange={setHelpOpen} />
       </AuthGate>
       <Toaster position="bottom-right" richColors closeButton />
     </TooltipProvider>

@@ -42,6 +42,7 @@ import {
   useDeleteObjects,
   useObjects,
 } from "@/lib/api/objects";
+import { isEditableTarget } from "@/lib/shortcuts";
 import { useSelectionStore } from "@/stores/selection";
 import { usePreviewStore } from "@/stores/preview";
 import { usePrefsStore } from "@/stores/prefs";
@@ -91,6 +92,7 @@ export function ObjectBrowser({
 
   const closePreview = usePreviewStore((s) => s.close);
   const openPreview = usePreviewStore((s) => s.open);
+  const previewOpenKey = usePreviewStore((s) => s.openKey);
 
   React.useEffect(() => {
     clearSelection();
@@ -116,6 +118,10 @@ export function ObjectBrowser({
   // Imperative handle into react-dropzone's file picker so the "Upload" button
   // and dropzone share one entry point.
   const openPickerRef = React.useRef<(() => void) | null>(null);
+
+  // Filter input is rendered inside ObjectToolbar; we hold a ref here so the
+  // "/" shortcut can focus it from the page level.
+  const filterInputRef = React.useRef<HTMLInputElement>(null);
 
   // ─── Derived data ───────────────────────────────────────────────────────
   // Flatten infinite-query pages into one list. Pages are appended in order,
@@ -578,6 +584,167 @@ export function ObjectBrowser({
     }
   }, []);
 
+  // ─── Keyboard shortcuts ─────────────────────────────────────────────────
+  // Bound once at mount and reads everything through a ref that's refreshed
+  // each render — same pattern as contextHandlersRef. Avoids re-binding the
+  // window listener for every selection change, which would be a ton of
+  // attach/detach churn on large lists.
+  const shortcutsRef = React.useRef({
+    previewOpenKey,
+    selectedEntries,
+    handleCopyLink,
+  });
+  shortcutsRef.current = {
+    previewOpenKey,
+    selectedEntries,
+    handleCopyLink,
+  };
+
+  React.useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const inEditable = isEditableTarget(e.target);
+      const mod = e.metaKey || e.ctrlKey;
+      const key = e.key;
+      const klow = key.toLowerCase();
+      const s = shortcutsRef.current;
+
+      // ⌘U — upload. Works from anywhere (the picker is benign even mid-typing).
+      if (mod && !e.shiftKey && !e.altKey && klow === "u") {
+        e.preventDefault();
+        openPickerRef.current?.();
+        return;
+      }
+
+      // ⌘⇧N — new folder.
+      if (mod && e.shiftKey && !e.altKey && klow === "n") {
+        e.preventDefault();
+        setNewFolderOpen(true);
+        return;
+      }
+
+      // ⌘A — select all visible. Skip inside text inputs so native select-all
+      // still works while the user is editing.
+      if (mod && !e.shiftKey && !e.altKey && klow === "a") {
+        if (inEditable) return;
+        e.preventDefault();
+        handleSelectAll(visibleRef.current);
+        return;
+      }
+
+      // ⌘C — copy public link for the single selected file. Yield to the
+      // browser if the user has a text selection or is in a text input —
+      // otherwise we'd hijack copy-text.
+      if (mod && !e.shiftKey && !e.altKey && klow === "c") {
+        if (inEditable) return;
+        const textSel = window.getSelection?.();
+        if (textSel && textSel.toString().length > 0) return;
+        const only =
+          s.selectedEntries.length === 1 ? s.selectedEntries[0] : null;
+        if (!only || only.type !== "object") return;
+        e.preventDefault();
+        s.handleCopyLink(only);
+        return;
+      }
+
+      // All remaining shortcuts: non-modifier and outside of editables.
+      if (mod || e.altKey) return;
+      if (inEditable) return;
+
+      // Esc — clear selection. Preview's own keydown owns Esc when open;
+      // bail so we don't also wipe the selection behind it.
+      if (key === "Escape") {
+        if (s.previewOpenKey !== null) return;
+        if (selectedIdsRef.current.size === 0) return;
+        e.preventDefault();
+        clearSelection();
+        setAnchor(null);
+        return;
+      }
+
+      // Del / Backspace — open the delete confirmation.
+      if (key === "Delete" || key === "Backspace") {
+        if (selectedIdsRef.current.size === 0) return;
+        e.preventDefault();
+        setDeleteOpen(true);
+        return;
+      }
+
+      // F2 — rename when exactly one item is selected.
+      if (key === "F2") {
+        if (s.selectedEntries.length !== 1) return;
+        e.preventDefault();
+        setRenameTarget(s.selectedEntries[0]!);
+        setRenameOpen(true);
+        return;
+      }
+
+      // Space — toggle preview. Opens for the single selected file, closes
+      // whatever's currently open.
+      if (key === " ") {
+        if (s.previewOpenKey !== null) {
+          e.preventDefault();
+          closePreview();
+          return;
+        }
+        const only =
+          s.selectedEntries.length === 1 ? s.selectedEntries[0] : null;
+        if (!only || only.type !== "object") return;
+        e.preventDefault();
+        const siblings = visibleRef.current
+          .filter((x): x is S3ObjectEntry => x.type === "object")
+          .map((x) => x.key);
+        openPreview(only.key, siblings);
+        return;
+      }
+
+      // / — focus the filter input. Skipped when the toolbar swapped it out
+      // for selection-mode UI (input isn't mounted, ref is null).
+      if (key === "/") {
+        const input = filterInputRef.current;
+        if (!input) return;
+        e.preventDefault();
+        input.focus();
+        input.select();
+        return;
+      }
+
+      // J/K + arrows — move the "cursor" by replacing selection with the
+      // adjacent visible entry. Preview owns these keys when it's open so it
+      // can step through siblings instead.
+      if (s.previewOpenKey !== null) return;
+      const goDown = key === "ArrowDown" || klow === "j";
+      const goUp = key === "ArrowUp" || klow === "k";
+      if (!goDown && !goUp) return;
+
+      const vis = visibleRef.current;
+      if (vis.length === 0) return;
+      e.preventDefault();
+
+      const ids = vis.map(entryId);
+      const cursor = anchorRef.current;
+      const cursorIdx = cursor ? ids.indexOf(cursor) : -1;
+      const nextIdx =
+        cursorIdx === -1
+          ? goDown
+            ? 0
+            : ids.length - 1
+          : goDown
+            ? Math.min(cursorIdx + 1, ids.length - 1)
+            : Math.max(cursorIdx - 1, 0);
+      const nextId = ids[nextIdx]!;
+      setManySelected([nextId]);
+      setAnchor(nextId);
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [
+    clearSelection,
+    closePreview,
+    handleSelectAll,
+    openPreview,
+    setManySelected,
+  ]);
+
   // ─── Render ─────────────────────────────────────────────────────────────
   return (
     <UploadDropzone
@@ -599,6 +766,7 @@ export function ObjectBrowser({
         totalBytes={totalBytes}
         filter={filter}
         onFilterChange={setFilter}
+        filterInputRef={filterInputRef}
         onUpload={() => openPickerRef.current?.()}
         onNewFolder={() => setNewFolderOpen(true)}
         onClearSelection={() => {

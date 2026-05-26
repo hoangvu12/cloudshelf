@@ -28,6 +28,7 @@ import {
 } from "@/lib/api/connections";
 import { useBuckets } from "@/lib/api/buckets";
 import { cn } from "@/lib/utils";
+import { SHORTCUTS } from "@/lib/shortcuts";
 import { useActiveConnectionStore } from "@/stores/active-connection";
 import { usePrefsStore, type ViewMode, type RowDensity } from "@/stores/prefs";
 import type { S3Connection } from "@server/types";
@@ -448,35 +449,6 @@ function ProfileBadge({
 
 // ─── Section: Keyboard ─────────────────────────────────────────────────
 
-const SHORTCUTS: { keys: React.ReactNode; action: string }[] = [
-  { keys: <KeyCombo keys={["⌘", "K"]} />, action: "Global search" },
-  { keys: <KeyCombo keys={["⌘", "U"]} />, action: "Upload files" },
-  { keys: <KeyCombo keys={["⌘", "⇧", "N"]} />, action: "New bucket / New folder" },
-  {
-    keys: (
-      <>
-        <Kbd>⌫</Kbd> or <Kbd>Del</Kbd>
-      </>
-    ),
-    action: "Delete selected items",
-  },
-  { keys: <KeyCombo keys={["⌘", "A"]} />, action: "Select all in view" },
-  {
-    keys: (
-      <>
-        <Kbd>J</Kbd> / <Kbd>K</Kbd> or <Kbd>↓</Kbd> / <Kbd>↑</Kbd>
-      </>
-    ),
-    action: "Navigate list up/down",
-  },
-  { keys: <Kbd>Space</Kbd>, action: "Toggle preview sidebar" },
-  { keys: <Kbd>/</Kbd>, action: "Focus path navigation" },
-  { keys: <Kbd>F2</Kbd>, action: "Rename selected item" },
-  { keys: <KeyCombo keys={["⌘", "C"]} />, action: "Copy public link" },
-  { keys: <Kbd>?</Kbd>, action: "Show all shortcuts" },
-  { keys: <Kbd>Esc</Kbd>, action: "Close modals / Clear selection" },
-];
-
 function KeyboardSection() {
   return (
     <SectionShell title="Keyboard shortcuts" accent="green">
@@ -498,27 +470,6 @@ function KeyboardSection() {
         </div>
       </div>
     </SectionShell>
-  );
-}
-
-function Kbd({ children }: { children: React.ReactNode }) {
-  return (
-    <kbd className="bg-ctp-mantle border-ctp-surface1 text-ctp-text inline-block rounded border border-b-2 px-1.5 py-0.5 font-mono text-[11px] shadow-sm">
-      {children}
-    </kbd>
-  );
-}
-
-function KeyCombo({ keys }: { keys: string[] }) {
-  return (
-    <>
-      {keys.map((k, i) => (
-        <React.Fragment key={i}>
-          {i > 0 && <span className="text-ctp-subtext mx-1 text-xs">+</span>}
-          <Kbd>{k}</Kbd>
-        </React.Fragment>
-      ))}
-    </>
   );
 }
 
