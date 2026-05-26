@@ -2,7 +2,7 @@ import * as React from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { FolderX, ServerCrash, UploadCloud } from "lucide-react";
+import { FolderX, ServerCrash, UploadCloud } from "@/lib/icons";
 
 import { AppStatusBar } from "@/components/app-shell";
 import { BreadcrumbPath } from "@/components/breadcrumb-path";

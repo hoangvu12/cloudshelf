@@ -3,7 +3,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ArrowLeft, Loader2, Lock } from "lucide-react";
+import { ArrowLeft, Loader2, Lock } from "@/lib/icons";
 
 import {
   FormCard,

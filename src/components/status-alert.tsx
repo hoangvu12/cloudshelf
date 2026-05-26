@@ -5,7 +5,7 @@ import {
   Info,
   AlertTriangle,
   type LucideIcon,
-} from "lucide-react";
+} from "@/lib/icons";
 import { cn } from "@/lib/utils";
 
 type StatusAlertVariant = "success" | "error" | "info" | "warning";

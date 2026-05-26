@@ -14,7 +14,7 @@ import {
   RotateCw,
   X,
   XCircle,
-} from "lucide-react";
+} from "@/lib/icons";
 
 import { cn } from "@/lib/utils";
 import { formatBytes } from "@/lib/format";
@@ -130,7 +130,7 @@ export function UploadPanel() {
 
   return (
     <div className="ctp-scope pointer-events-none fixed bottom-6 right-6 z-50 w-full max-w-[28rem] sm:max-w-[32rem]">
-      <div className="bg-ctp-base/95 border-ctp-surface1 text-ctp-text pointer-events-auto flex flex-col overflow-hidden rounded-xl border shadow-[0_25px_50px_-12px_rgba(0,0,0,0.8)] backdrop-blur-xl">
+      <div className="bg-ctp-base/95 border-ctp-surface1 text-ctp-text pointer-events-auto flex flex-col overflow-hidden rounded-xl border shadow-[0_25px_50px_-12px_rgba(0,0,0,0.8)] backdrop-blur-xl animate-in fade-in-0 slide-in-from-bottom-2 duration-200 ease-out">
         <Header
           done={data.done}
           active={data.active}
@@ -440,11 +440,9 @@ function UploadingRow({
       <div>
         <div className="bg-ctp-surface0 mb-2 h-1.5 w-full overflow-hidden rounded-full">
           <div
-            className="bg-ctp-mauve relative h-full rounded-full shadow-[0_0_10px_rgba(203,166,247,0.4)]"
+            className="bg-ctp-mauve relative h-full rounded-full shadow-[0_0_10px_rgba(203,166,247,0.4)] transition-[width] duration-200 ease-linear"
             style={{ width: `${pct}%` }}
-          >
-            <div className="absolute inset-0 animate-pulse bg-white/20" />
-          </div>
+          />
         </div>
         <div className="flex items-center justify-between font-mono text-[10px]">
           <div className="text-ctp-mauve font-bold">
@@ -734,7 +732,7 @@ function MinimizedPanel({
       <button
         type="button"
         onClick={onExpand}
-        className="bg-ctp-base/95 border-ctp-surface1 hover:border-ctp-subtext text-ctp-text pointer-events-auto flex w-72 items-center gap-3 rounded-full border px-4 py-2 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.8)] backdrop-blur-xl transition-colors"
+        className="bg-ctp-base/95 border-ctp-surface1 hover:border-ctp-subtext text-ctp-text pointer-events-auto flex w-72 items-center gap-3 rounded-full border px-4 py-2 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.8)] backdrop-blur-xl transition-colors animate-in fade-in-0 slide-in-from-bottom-2 duration-200 ease-out"
       >
         <div className="relative flex size-6 shrink-0 items-center justify-center">
           <svg className="size-6 -rotate-90" viewBox="0 0 24 24">
@@ -758,7 +756,7 @@ function MinimizedPanel({
               strokeDashoffset={dashOffset}
               strokeLinecap="round"
               className={cn(
-                "transition-[stroke-dashoffset] duration-200",
+                "transition-[stroke-dashoffset] duration-200 ease-linear",
                 allDone ? "text-ctp-green" : "text-ctp-mauve"
               )}
             />
@@ -784,7 +782,7 @@ function MinimizedPanel({
           <div className="bg-ctp-surface0 mt-1.5 h-1 w-full overflow-hidden rounded-full">
             <div
               className={cn(
-                "h-full rounded-full transition-[width] duration-200",
+                "h-full rounded-full transition-[width] duration-200 ease-linear",
                 allDone ? "bg-ctp-green" : "bg-ctp-mauve"
               )}
               style={{ width: `${progress}%` }}

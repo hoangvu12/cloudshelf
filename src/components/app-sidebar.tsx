@@ -8,7 +8,7 @@ import {
   Plus,
   Server,
   Settings,
-} from "lucide-react";
+} from "@/lib/icons";
 
 import { cn } from "@/lib/utils";
 import { formatBytes } from "@/lib/format";
@@ -127,7 +127,7 @@ export function AppSidebar({
         </div>
         <div className="bg-ctp-surface0 h-1 w-full overflow-hidden rounded-full">
           <div
-            className="from-ctp-blue to-ctp-mauve h-1 rounded-full bg-gradient-to-r transition-all"
+            className="from-ctp-blue to-ctp-mauve h-1 rounded-full bg-gradient-to-r transition-[width] duration-300 ease-linear"
             style={{ width: `${pct}%` }}
           />
         </div>

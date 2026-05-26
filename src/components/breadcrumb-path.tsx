@@ -1,5 +1,5 @@
 import * as React from "react";
-import { ArrowUp, FolderOpen } from "lucide-react";
+import { ArrowUp, FolderOpen } from "@/lib/icons";
 
 import { cn } from "@/lib/utils";
 import { prefixAtDepth, prefixSegments } from "@/lib/object-path";
@@ -32,7 +32,7 @@ export function BreadcrumbPath({
         type="button"
         onClick={() => onNavigate(parent)}
         disabled={atRoot}
-        className="hover:bg-ctp-surface0 text-ctp-subtext hover:text-ctp-text rounded p-1 transition-colors focus:outline-none disabled:cursor-not-allowed disabled:opacity-40"
+        className="hover:bg-ctp-surface0 text-ctp-subtext hover:text-ctp-text rounded p-1 focus:outline-none disabled:cursor-not-allowed disabled:opacity-40"
         aria-label="Up one level"
         title="Up one level"
       >
@@ -45,7 +45,7 @@ export function BreadcrumbPath({
           type="button"
           onClick={() => onNavigate("")}
           className={cn(
-            "text-ctp-green shrink-0 font-bold transition-colors hover:opacity-80 focus:outline-none",
+            "text-ctp-green shrink-0 font-bold hover:opacity-80 focus:outline-none",
             atRoot && "cursor-default opacity-100"
           )}
         >
@@ -66,7 +66,7 @@ export function BreadcrumbPath({
                 <button
                   type="button"
                   onClick={() => onNavigate(target)}
-                  className="text-ctp-text hover:text-ctp-mauve truncate transition-colors focus:outline-none"
+                  className="text-ctp-text hover:text-ctp-mauve truncate focus:outline-none"
                 >
                   {segment}
                 </button>

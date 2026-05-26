@@ -10,16 +10,23 @@ import { cn } from "@/lib/utils";
  * route mounts the preview inside a shadcn Drawer instead, so this slot is
  * intentionally hidden — keeping the panel mounted at sm: would steal width
  * from a list that's already cramped.
+ *
+ * When `previewPanel` is provided, the aside stays mounted and animates its
+ * width via `previewOpen` so opening/closing the preview slides the file
+ * list rather than snapping it. The panel itself is responsible for
+ * returning null when there's nothing to show.
  */
 export function AppShell({
   sidebar,
   children,
   previewPanel,
+  previewOpen = false,
   className,
 }: {
   sidebar: React.ReactNode;
   children: React.ReactNode;
   previewPanel?: React.ReactNode;
+  previewOpen?: boolean;
   className?: string;
 }) {
   return (
@@ -32,7 +39,16 @@ export function AppShell({
       {sidebar}
       <div className="flex min-w-0 flex-1 flex-col">{children}</div>
       {previewPanel ? (
-        <aside className="border-ctp-surface0 hidden w-[380px] shrink-0 border-l lg:flex lg:flex-col xl:w-[440px]">
+        <aside
+          aria-hidden={!previewOpen}
+          className={cn(
+            "hidden shrink-0 overflow-hidden lg:flex lg:flex-col",
+            "transition-[width,border-color] duration-200 ease-out",
+            previewOpen
+              ? "border-ctp-surface0 w-[380px] border-l xl:w-[440px]"
+              : "w-0 border-l border-l-transparent"
+          )}
+        >
           {previewPanel}
         </aside>
       ) : null}

@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useDropzone } from "react-dropzone";
-import { UploadCloud } from "lucide-react";
+import { UploadCloud } from "@/lib/icons";
 
 import { cn } from "@/lib/utils";
 
@@ -55,7 +55,7 @@ export function UploadDropzone({
           )}
         >
           <div className="border-ctp-mauve bg-ctp-mauve/5 flex h-full w-full flex-col items-center justify-center rounded-xl border-2 border-dashed shadow-[0_0_50px_rgba(203,166,247,0.1)]">
-            <div className="bg-ctp-mauve/20 mb-6 flex size-20 animate-bounce items-center justify-center rounded-full">
+            <div className="bg-ctp-mauve/20 mb-6 flex size-20 animate-bounce-3 items-center justify-center rounded-full">
               <UploadCloud className="text-ctp-mauve size-10" />
             </div>
             <h2 className="text-ctp-mauve mb-2 text-xl font-bold">

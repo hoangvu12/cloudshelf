@@ -1,5 +1,5 @@
 import * as React from "react"
-import { CheckIcon } from "lucide-react"
+import { CheckIcon } from "@/lib/icons"
 import { Checkbox as CheckboxPrimitive } from "radix-ui"
 
 import { cn } from "@/lib/utils"

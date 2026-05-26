@@ -10,7 +10,7 @@ import {
   Search,
   Trash2,
   UploadCloud,
-} from "lucide-react";
+} from "@/lib/icons";
 
 import { cn } from "@/lib/utils";
 import { formatBytes, formatCount } from "@/lib/format";
@@ -233,7 +233,7 @@ function ActionButton({
       disabled={disabled}
       title={title}
       className={cn(
-        "flex items-center gap-1.5 rounded px-2.5 py-1.5 transition-colors focus:outline-none",
+        "flex items-center gap-1.5 rounded px-2.5 py-1.5 focus:outline-none",
         destructive
           ? "text-ctp-red hover:bg-ctp-red/20"
           : "text-ctp-text hover:bg-ctp-surface1",

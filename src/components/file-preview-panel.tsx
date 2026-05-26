@@ -10,7 +10,7 @@ import {
   Link as LinkIcon,
   Loader2,
   X,
-} from "lucide-react";
+} from "@/lib/icons";
 
 import { cn } from "@/lib/utils";
 import { formatBytes, formatFileTime } from "@/lib/format";

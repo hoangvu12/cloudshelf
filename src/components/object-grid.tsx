@@ -1,5 +1,6 @@
 import * as React from "react";
-import { Folder, Loader2 } from "lucide-react";
+import { Loader2 } from "@/lib/icons";
+import { folderIconFor } from "@/lib/folder-icons";
 import { useVirtualizer } from "@tanstack/react-virtual";
 
 import { cn } from "@/lib/utils";
@@ -219,8 +220,10 @@ function ObjectTileImpl({
 
   const isFolder = entry.type === "prefix";
   const display = entryDisplayName(entry, currentPrefix);
+  // Folder icons come from Material Icon Theme (colored per folder type), so
+  // no Tailwind color class is needed. Files keep their per-extension accent.
   const { Icon, color } = isFolder
-    ? { Icon: Folder, color: "text-ctp-blue" }
+    ? { Icon: folderIconFor(display.replace(/\/$/, "")), color: "" }
     : fileAppearance(display);
 
   const handleClick = (e: React.MouseEvent) => {
@@ -238,7 +241,7 @@ function ObjectTileImpl({
     <div
       onClick={handleClick}
       className={cn(
-        "group border-ctp-surface0 bg-ctp-mantle/40 hover:border-ctp-surface1 hover:bg-ctp-surface0/50 relative flex h-full cursor-pointer flex-col items-center rounded-lg border text-center transition-colors select-none",
+        "group border-ctp-surface0 bg-ctp-mantle/40 hover:border-ctp-surface1 hover:bg-ctp-surface0/50 relative flex h-full cursor-pointer flex-col items-center rounded-lg border text-center select-none",
         compact ? "gap-1.5 p-2" : "gap-2 p-3",
         selected &&
           "border-ctp-mauve/60 bg-ctp-surface0 hover:border-ctp-mauve/60"
@@ -258,13 +261,7 @@ function ObjectTileImpl({
         />
       </div>
 
-      <Icon
-        className={cn(
-          color,
-          isFolder && "fill-ctp-blue/30",
-          compact ? "size-8" : "size-12"
-        )}
-      />
+      <Icon className={cn(color, compact ? "size-8" : "size-12")} />
       <div
         className={cn(
           "text-ctp-text w-full truncate text-center",

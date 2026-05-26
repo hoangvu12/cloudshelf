@@ -1,5 +1,5 @@
 import * as React from "react";
-import { FolderPlus, Grid, List, Search } from "lucide-react";
+import { FolderPlus, Grid, List, Search } from "@/lib/icons";
 
 import { cn } from "@/lib/utils";
 import { usePrefsStore, type ViewMode } from "@/stores/prefs";
@@ -122,7 +122,7 @@ function ViewModeButton({
       aria-label={label}
       aria-pressed={active}
       className={cn(
-        "rounded p-1 transition-colors focus:outline-none",
+        "rounded p-1 focus:outline-none",
         active
           ? "bg-ctp-surface1 text-ctp-text"
           : "text-ctp-subtext hover:text-ctp-text"

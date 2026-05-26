@@ -1,7 +1,7 @@
 import * as React from "react";
 import { Command } from "cmdk";
 import { Dialog as DialogPrimitive } from "radix-ui";
-import { Folder, FolderPlus, Search, Settings } from "lucide-react";
+import { Database, FolderPlus, Search, Settings } from "@/lib/icons";
 import { useNavigate } from "@tanstack/react-router";
 
 import { cn } from "@/lib/utils";
@@ -79,7 +79,7 @@ export function CommandPalette({
                         onSelectBucket?.(b.name);
                         close();
                       }}
-                      icon={<Folder className="text-ctp-blue size-4" />}
+                      icon={<Database className="text-yellow-300 size-4" />}
                       trailing={
                         <span className="text-ctp-subtext text-[10px]">
                           {formatBytes(b.sizeBytes)}
@@ -140,7 +140,7 @@ function PaletteItem({
       value={value}
       onSelect={onSelect}
       className={cn(
-        "text-ctp-subtext flex cursor-pointer items-center gap-3 rounded px-3 py-2 transition-colors",
+        "text-ctp-subtext flex cursor-pointer items-center gap-3 rounded px-3 py-2",
         "data-[selected=true]:bg-ctp-surface0/70 data-[selected=true]:text-ctp-text"
       )}
     >

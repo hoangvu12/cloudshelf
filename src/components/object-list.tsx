@@ -1,5 +1,5 @@
 import * as React from "react";
-import { ChevronDown, ChevronUp, Loader2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Loader2 } from "@/lib/icons";
 import { useVirtualizer } from "@tanstack/react-virtual";
 
 import { cn } from "@/lib/utils";

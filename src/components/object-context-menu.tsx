@@ -8,7 +8,7 @@ import {
   Link as LinkIcon,
   PenLine,
   Trash2,
-} from "lucide-react";
+} from "@/lib/icons";
 
 import {
   ContextMenu,

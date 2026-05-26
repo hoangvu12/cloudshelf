@@ -1,9 +1,9 @@
 import * as React from "react";
-import { Folder } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { formatBytes, formatFileTime } from "@/lib/format";
 import { fileAppearance } from "@/lib/file-types";
+import { folderIconFor } from "@/lib/folder-icons";
 import { entryDisplayName, entryId } from "@/lib/object-path";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useIsSelected } from "@/stores/selection";
@@ -54,8 +54,11 @@ function ObjectRowImpl({
 
   const isFolder = entry.type === "prefix";
   const display = entryDisplayName(entry, currentPrefix);
+  // Folder icons come from Material Icon Theme — colored per folder type, so
+  // no Tailwind color class is applied. File icons keep their per-extension
+  // accent color from fileAppearance().
   const { Icon: FileIcon, color: fileColor, label: fileLabel } = isFolder
-    ? { Icon: Folder, color: "text-ctp-blue", label: "Folder" }
+    ? { Icon: folderIconFor(display.replace(/\/$/, "")), color: "", label: "Folder" }
     : fileAppearance(display);
 
   const handleRowClick = (e: React.MouseEvent) => {
@@ -93,13 +96,7 @@ function ObjectRowImpl({
       </div>
 
       <div className="flex min-w-0 flex-1 items-center gap-3">
-        <FileIcon
-          className={cn(
-            "size-5 shrink-0",
-            fileColor,
-            isFolder && "fill-ctp-blue/30"
-          )}
-        />
+        <FileIcon className={cn("size-5 shrink-0", fileColor)} />
         <span
           className={cn(
             "text-ctp-text truncate text-sm",

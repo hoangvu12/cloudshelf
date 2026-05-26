@@ -17,7 +17,7 @@ import {
   Server,
   Trash2,
   UploadCloud,
-} from "lucide-react";
+} from "@/lib/icons";
 
 import { AppShell, AppStatusBar } from "@/components/app-shell";
 import { AppSidebar } from "@/components/app-sidebar";

@@ -1,14 +1,10 @@
 import * as React from "react";
 import {
-  Folder,
-  FolderArchive,
-  FolderCode,
-  FolderKanban,
-  FolderOpen,
+  Database,
   MoreHorizontal,
   Pin,
   type LucideIcon,
-} from "lucide-react";
+} from "@/lib/icons";
 
 import { cn } from "@/lib/utils";
 import { formatBytes, formatCount, formatFileTime } from "@/lib/format";
@@ -112,20 +108,20 @@ function BucketCard({
   onTogglePin?: (name: string) => void;
   onOpen?: (name: string) => void;
 }) {
-  const { Icon, accent, fill } = bucketAppearance(bucket.name, pinned);
+  const { Icon, accent } = bucketAppearance(bucket.name);
   const compact = density === "compact";
 
   return (
     <div
       onClick={() => onOpen?.(bucket.name)}
       className={cn(
-        "group bg-ctp-mantle/40 border-ctp-surface0 hover:border-ctp-mauve/60 hover:bg-ctp-surface0/30 relative flex cursor-pointer flex-col rounded-lg border transition-colors",
+        "group bg-ctp-mantle/40 border-ctp-surface0 hover:border-ctp-mauve/60 hover:bg-ctp-surface0/30 relative flex cursor-pointer flex-col rounded-lg border",
         compact ? "gap-2 p-3" : "gap-3 p-4"
       )}
     >
       <div className="flex items-start justify-between">
         <Icon
-          className={cn(compact ? "size-7" : "size-10", accent, fill)}
+          className={cn(compact ? "size-7" : "size-10", accent)}
         />
         <div className="flex items-center gap-1">
           {pinned && (
@@ -135,7 +131,7 @@ function BucketCard({
             type="button"
             aria-label="More actions"
             onClick={(e) => e.stopPropagation()}
-            className="text-ctp-subtext hover:text-ctp-text opacity-0 transition-opacity group-hover:opacity-100 focus:outline-none"
+            className="text-ctp-subtext hover:text-ctp-text opacity-0 group-hover:opacity-100 focus:outline-none"
           >
             <MoreHorizontal className="size-4" />
           </button>
@@ -176,7 +172,7 @@ function BucketCard({
           onTogglePin?.(bucket.name);
         }}
         className={cn(
-          "absolute top-2 right-2 transition-colors focus:outline-none",
+          "absolute top-2 right-2 focus:outline-none",
           pinned ? "text-ctp-yellow" : "text-ctp-subtext hover:text-ctp-yellow opacity-0 group-hover:opacity-100"
         )}
       >
@@ -186,38 +182,14 @@ function BucketCard({
   );
 }
 
-const APPEARANCE_FALLBACKS: { Icon: LucideIcon; accent: string; fill: string }[] = [
-  { Icon: Folder, accent: "text-ctp-blue", fill: "fill-ctp-blue/20" },
-  { Icon: Folder, accent: "text-ctp-mauve", fill: "fill-ctp-mauve/20" },
-  { Icon: Folder, accent: "text-ctp-green", fill: "fill-ctp-green/20" },
-  { Icon: Folder, accent: "text-ctp-pink", fill: "fill-ctp-pink/20" },
-  { Icon: Folder, accent: "text-ctp-yellow", fill: "fill-ctp-yellow/20" },
-];
-
+/**
+ * All buckets get the same S3-style cylinder in the brand accent. Color
+ * carries no implicit meaning — the pin badge is the only color signal.
+ */
 function bucketAppearance(
-  name: string,
-  pinned: boolean
-): { Icon: LucideIcon; accent: string; fill: string } {
-  const lower = name.toLowerCase();
-  if (lower.includes("backup") || lower.includes("archive"))
-    return { Icon: FolderArchive, accent: "text-ctp-pink", fill: "fill-ctp-pink/20" };
-  if (lower.includes("video") || lower.includes("media"))
-    return { Icon: FolderKanban, accent: "text-ctp-green", fill: "fill-ctp-green/20" };
-  if (lower.includes("photo") || lower.includes("image"))
-    return pinned
-      ? { Icon: FolderOpen, accent: "text-ctp-blue", fill: "fill-ctp-blue/20" }
-      : { Icon: Folder, accent: "text-ctp-blue", fill: "fill-ctp-blue/20" };
-  if (lower.includes("code") || lower.includes("scratch") || lower.includes("src"))
-    return { Icon: FolderCode, accent: "text-ctp-mauve", fill: "fill-ctp-mauve/20" };
-
-  const idx = hash(lower) % APPEARANCE_FALLBACKS.length;
-  return APPEARANCE_FALLBACKS[idx]!;
-}
-
-function hash(s: string): number {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
-  return Math.abs(h);
+  _name: string
+): { Icon: LucideIcon; accent: string } {
+  return { Icon: Database, accent: "text-yellow-300" };
 }
 
 function compare(key: SortKey) {

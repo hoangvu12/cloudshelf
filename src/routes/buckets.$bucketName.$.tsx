@@ -1,6 +1,6 @@
 import * as React from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Plug, ServerOff } from "lucide-react";
+import { Plug, ServerOff } from "@/lib/icons";
 
 import { AppShell } from "@/components/app-shell";
 import { AppSidebar } from "@/components/app-sidebar";
@@ -60,8 +60,10 @@ function BucketPage() {
   const buckets = bucketsQuery.data ?? [];
 
   const [paletteOpen, setPaletteOpen] = useCommandPaletteShortcut();
-  // Mount the desktop panel only when something is being previewed — otherwise
-  // we'd permanently steal ~380px of width from the file list.
+  // The desktop aside stays mounted and animates its width — `previewOpen`
+  // drives whether it occupies space, and the panel itself returns null when
+  // there's nothing to show, so the collapsed state is just an empty 0-width
+  // slot.
   const previewOpen = usePreviewStore((s) => s.openKey !== null);
 
   if (connectionsQuery.isLoading) {
@@ -123,14 +125,13 @@ function BucketPage() {
           }}
         />
       }
+      previewOpen={previewOpen}
       previewPanel={
-        previewOpen ? (
-          <FilePreviewPanel
-            connectionId={activeConnection.id}
-            bucket={bucket}
-            prefix={prefix}
-          />
-        ) : undefined
+        <FilePreviewPanel
+          connectionId={activeConnection.id}
+          bucket={bucket}
+          prefix={prefix}
+        />
       }
     >
       <ObjectBrowser

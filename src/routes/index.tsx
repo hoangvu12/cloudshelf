@@ -1,6 +1,6 @@
 import * as React from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { FolderX, Plug, ServerCrash, ServerOff } from "lucide-react";
+import { Database, Plug, ServerCrash, ServerOff } from "@/lib/icons";
 
 import { AppShell, AppStatusBar } from "@/components/app-shell";
 import { AppSidebar } from "@/components/app-sidebar";
@@ -232,7 +232,7 @@ function BucketsMain({
     case "no-buckets":
       return (
         <EmptyState
-          icon={<FolderX />}
+          icon={<Database />}
           title="No buckets"
           description="This connection doesn't have any buckets yet."
           action={
