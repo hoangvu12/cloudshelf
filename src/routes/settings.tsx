@@ -276,8 +276,8 @@ function UploadsSection() {
           onChange={(v) => patch({ overwriteWarning: v })}
         />
         <SettingToggleRow
-          label="Resume on reload"
-          description="Automatically resume paused uploads after a page refresh."
+          label="Resume re-added files"
+          description="When you re-add the same file after a refresh, skip parts that already uploaded."
           checked={resumeOnReload}
           onChange={(v) => patch({ resumeOnReload: v })}
         />
@@ -628,33 +628,33 @@ function SettingToggleRow({
   onChange: (next: boolean) => void;
 }) {
   return (
-    <SettingRow
-      label={label}
-      description={description}
-      control={
-        <button
-          type="button"
-          role="switch"
-          aria-checked={checked}
-          onClick={() => onChange(!checked)}
+    <div className="flex items-center justify-between gap-4">
+      <div className="w-48 shrink-0">
+        <div className="text-foreground text-sm font-medium">{label}</div>
+        <div className="text-muted-foreground mt-1 text-xs">{description}</div>
+      </div>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        onClick={() => onChange(!checked)}
+        className={cn(
+          "relative h-[18px] w-8 shrink-0 rounded-full border transition-colors",
+          checked
+            ? "border-primary-text bg-primary-text"
+            : "border-surface-1 bg-muted"
+        )}
+      >
+        <span
           className={cn(
-            "relative h-[18px] w-8 shrink-0 rounded-full border transition-colors",
+            "absolute top-[1px] left-[1px] size-[14px] rounded-full transition-transform",
             checked
-              ? "border-primary-text bg-primary-text"
-              : "border-surface-1 bg-muted"
+              ? "bg-input-bg translate-x-[14px]"
+              : "bg-muted-foreground translate-x-0"
           )}
-        >
-          <span
-            className={cn(
-              "absolute top-[1px] left-[1px] size-[14px] rounded-full transition-transform",
-              checked
-                ? "bg-input-bg translate-x-[14px]"
-                : "bg-muted-foreground translate-x-0"
-            )}
-          />
-        </button>
-      }
-    />
+        />
+      </button>
+    </div>
   );
 }
 
