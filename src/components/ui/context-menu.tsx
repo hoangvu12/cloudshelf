@@ -53,10 +53,19 @@ function ContextMenuItem({
     <ContextMenuPrimitive.Item
       data-slot="context-menu-item"
       data-variant={variant}
+      // Suppress Radix's focus-on-pointermove. Default Radix behavior calls
+      // item.focus({ preventScroll: true }) on every pointermove event, which
+      // is what makes the highlight visibly trail the cursor on fast sweeps
+      // (each move triggers blur+focus, style recalc, ARIA bookkeeping).
+      // Radix's composeEventHandlers checks defaultPrevented before running
+      // its own handler, so preventDefault here cleanly skips the focus call.
+      // CSS :hover (below) gives the visual highlight; keyboard nav still
+      // works because arrow keys go through roving focus, not pointermove.
+      onPointerMove={(e) => e.preventDefault()}
       className={cn(
-        "focus:bg-accent focus:text-accent-foreground relative flex cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-hidden select-none",
+        "focus:bg-accent focus:text-accent-foreground hover:bg-accent hover:text-accent-foreground relative flex cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-hidden select-none",
         "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
-        "data-[variant=destructive]:text-destructive data-[variant=destructive]:focus:bg-destructive/15 data-[variant=destructive]:focus:text-destructive",
+        "data-[variant=destructive]:text-destructive data-[variant=destructive]:focus:bg-destructive/15 data-[variant=destructive]:focus:text-destructive data-[variant=destructive]:hover:bg-destructive/15 data-[variant=destructive]:hover:text-destructive",
         "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",
         className
       )}
