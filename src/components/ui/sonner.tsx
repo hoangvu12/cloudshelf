@@ -7,31 +7,29 @@ import {
   OctagonXIcon,
   TriangleAlertIcon,
 } from "@/lib/icons"
-import { useTheme } from "next-themes"
 import { Toaster as Sonner, type ToasterProps } from "sonner"
 
-const Toaster = ({ ...props }: ToasterProps) => {
-  const { theme = "system" } = useTheme()
-
+/**
+ * Every theme we ship is dark-aesthetic — pinning sonner to "dark" so it
+ * doesn't fall back to its light styles when next-themes hands it a palette
+ * name like "mocha" that it doesn't recognize.
+ *
+ * Colors live in styles.css under "Sonner toast styling" — a single place
+ * keeps the per-type tinting (icon + left accent bar) in sync with the active
+ * palette via our semantic tokens.
+ */
+const Toaster = (props: ToasterProps) => {
   return (
     <Sonner
-      theme={theme as ToasterProps["theme"]}
-      className="toaster group"
+      theme="dark"
+      className="toaster"
       icons={{
-        success: <CircleCheckIcon className="size-4" />,
-        info: <InfoIcon className="size-4" />,
-        warning: <TriangleAlertIcon className="size-4" />,
-        error: <OctagonXIcon className="size-4" />,
-        loading: <Loader2Icon className="size-4 animate-spin" />,
+        success: <CircleCheckIcon className="text-success size-4" />,
+        info: <InfoIcon className="text-info size-4" />,
+        warning: <TriangleAlertIcon className="text-accent-yellow size-4" />,
+        error: <OctagonXIcon className="text-destructive size-4" />,
+        loading: <Loader2Icon className="text-primary-text size-4 animate-spin" />,
       }}
-      style={
-        {
-          "--normal-bg": "var(--popover)",
-          "--normal-text": "var(--popover-foreground)",
-          "--normal-border": "var(--border)",
-          "--border-radius": "var(--radius)",
-        } as React.CSSProperties
-      }
       {...props}
     />
   )

@@ -22,26 +22,17 @@ import {
 import { useLogout, useMe } from "@/lib/api/auth";
 import type { S3Connection } from "@server/types";
 
-type AccentColor = "blue" | "mauve" | "subtext";
-
 interface PlaceItem {
   label: string;
   to?: string;
   onClick?: () => void;
   icon: React.ReactNode;
-  accent: AccentColor;
   badge?: React.ReactNode;
 }
 
-const ACCENT_TEXT: Record<AccentColor, string> = {
-  blue: "text-accent-blue",
-  mauve: "text-accent-mauve",
-  subtext: "text-muted-foreground",
-};
-
 const PLACES: PlaceItem[] = [
-  { label: "All buckets", to: "/", icon: <Home className="size-4" />, accent: "blue" },
-  { label: "Settings", to: "/settings", icon: <Settings className="size-4" />, accent: "subtext" },
+  { label: "All buckets", to: "/", icon: <Home className="size-4" /> },
+  { label: "Settings", to: "/settings", icon: <Settings className="size-4" /> },
 ];
 
 export function AppSidebar({
@@ -163,7 +154,7 @@ function SignedInFooter({
       </div>
       <div className="bg-muted h-1 w-full overflow-hidden rounded-full">
         <div
-          className="from-accent-blue to-accent-mauve h-1 rounded-full bg-gradient-to-r transition-[width] duration-300 ease-linear"
+          className="bg-primary-text h-1 rounded-full transition-[width] duration-300 ease-linear"
           style={{ width: `${pct}%` }}
         />
       </div>
@@ -182,12 +173,16 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 function PlaceLink({ item }: { item: PlaceItem }) {
   const location = useLocation();
   const isActive = item.to ? location.pathname === item.to : false;
-  const accent = ACCENT_TEXT[item.accent];
 
   const inner = (
     <>
       <span className="flex items-center gap-3">
-        <span className={cn("shrink-0", isActive ? "text-accent-mauve" : accent)}>
+        <span
+          className={cn(
+            "shrink-0",
+            isActive ? "text-primary-text" : "text-muted-foreground"
+          )}
+        >
           {item.icon}
         </span>
         {item.label}
@@ -199,7 +194,7 @@ function PlaceLink({ item }: { item: PlaceItem }) {
   const className = cn(
     "flex items-center justify-between gap-3 rounded-md px-2 py-1.5 text-sm transition-colors group focus:outline-none",
     isActive
-      ? "bg-surface-1 text-accent-mauve font-medium"
+      ? "bg-surface-1 text-primary-text font-medium"
       : "text-muted-foreground hover:bg-muted hover:text-foreground"
   );
 
@@ -231,10 +226,10 @@ function ActiveConnectionSwitcher({
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className="bg-muted/30 text-foreground hover:bg-muted focus-visible:ring-accent-mauve/40 group flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-sm transition-colors focus:outline-none focus-visible:ring-2"
+          className="bg-muted/30 text-foreground hover:bg-muted focus-visible:ring-primary-text/40 group flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-sm transition-colors focus:outline-none focus-visible:ring-2"
         >
           <span className="flex min-w-0 items-center gap-3 overflow-hidden">
-            <Server className="text-accent-mauve size-4 shrink-0" />
+            <Server className="text-muted-foreground size-4 shrink-0" />
             <span className="min-w-0 truncate">
               <span className="block truncate">
                 {activeConnection?.name ?? "No connection"}

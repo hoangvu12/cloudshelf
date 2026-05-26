@@ -63,15 +63,15 @@ export function BreadcrumbPath({
       </button>
 
       <div className="bg-input-bg border-border flex min-w-0 items-center rounded border px-3 py-1 text-xs">
-        <FolderOpen className="text-accent-mauve mr-2 size-3.5 shrink-0" />
+        <FolderOpen className="text-muted-foreground mr-2 size-3.5 shrink-0" />
 
         {atHome ? (
-          <span className="text-accent-mauve shrink-0 font-bold">Buckets</span>
+          <span className="text-primary-text shrink-0 font-bold">Buckets</span>
         ) : (
           <button
             type="button"
             onClick={() => onNavigateHome?.()}
-            className="text-accent-green shrink-0 font-bold hover:opacity-80 focus:outline-none"
+            className="text-foreground hover:text-primary-text shrink-0 font-bold focus:outline-none"
           >
             Buckets
           </button>
@@ -81,12 +81,12 @@ export function BreadcrumbPath({
           <>
             <span className="text-muted-foreground mx-2 shrink-0">/</span>
             {atBucketRoot ? (
-              <span className="text-accent-mauve truncate font-bold">{bucket}</span>
+              <span className="text-primary-text truncate font-bold">{bucket}</span>
             ) : (
               <button
                 type="button"
                 onClick={() => onNavigatePrefix?.("")}
-                className="text-foreground hover:text-accent-mauve shrink-0 truncate focus:outline-none"
+                className="text-foreground hover:text-primary-text shrink-0 truncate focus:outline-none"
               >
                 {bucket}
               </button>
@@ -101,14 +101,14 @@ export function BreadcrumbPath({
             <React.Fragment key={target}>
               <span className="text-muted-foreground mx-2 shrink-0">/</span>
               {isLast ? (
-                <span className="text-accent-mauve truncate font-bold">
+                <span className="text-primary-text truncate font-bold">
                   {segment}
                 </span>
               ) : (
                 <button
                   type="button"
                   onClick={() => onNavigatePrefix?.(target)}
-                  className="text-foreground hover:text-accent-mauve truncate focus:outline-none"
+                  className="text-foreground hover:text-primary-text truncate focus:outline-none"
                 >
                   {segment}
                 </button>

@@ -40,8 +40,8 @@ export function CommandPalette({
           aria-describedby={undefined}
           className={cn(
             "fixed top-32 left-1/2 z-50 w-full max-w-2xl -translate-x-1/2",
-            "bg-background border-accent-mauve overflow-hidden rounded-xl border-2",
-            "shadow-[0_0_40px_rgba(203,166,247,0.15)] outline-none",
+            "bg-background border-primary-text overflow-hidden rounded-xl border-2",
+            "shadow-[0_0_40px_color-mix(in_oklab,_var(--primary-text)_15%,_transparent)] outline-none",
             "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95",
             "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95"
           )}
@@ -51,7 +51,7 @@ export function CommandPalette({
           </DialogPrimitive.Title>
           <Command className="bg-transparent">
             <div className="bg-background border-border flex items-center gap-3 border-b p-4">
-              <Search className="text-accent-mauve size-5 shrink-0" />
+              <Search className="text-primary-text size-5 shrink-0" />
               <Command.Input
                 autoFocus
                 placeholder="Search buckets, actions, or settings..."
@@ -99,7 +99,7 @@ export function CommandPalette({
                 <PaletteItem
                   value="action create new bucket"
                   onSelect={close}
-                  icon={<FolderPlus className="text-accent-mauve size-4" />}
+                  icon={<FolderPlus className="text-primary-text size-4" />}
                 >
                   Create new bucket
                 </PaletteItem>

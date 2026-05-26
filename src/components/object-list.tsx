@@ -181,7 +181,7 @@ function LoaderRow({ loading }: { loading: boolean }) {
     <div className="text-muted-foreground flex h-full items-center justify-center gap-2 font-mono text-[11px]">
       {loading ? (
         <>
-          <Loader2 className="text-accent-mauve size-3.5 animate-spin" />
+          <Loader2 className="text-primary-text size-3.5 animate-spin" />
           Loading more...
         </>
       ) : (
@@ -236,7 +236,7 @@ function Header({
         />
       </div>
       <SortHeader
-        className="flex-1"
+        className="min-w-0 flex-1"
         active={sortKey === "name"}
         dir={sortDir}
         onClick={() => onSortChange("name")}
@@ -244,7 +244,7 @@ function Header({
         Name
       </SortHeader>
       <SortHeader
-        className="w-24 justify-end"
+        className="w-20 shrink-0 justify-end sm:w-24"
         active={sortKey === "size"}
         dir={sortDir}
         onClick={() => onSortChange("size")}
@@ -252,7 +252,7 @@ function Header({
         Size
       </SortHeader>
       <SortHeader
-        className="w-28 justify-start pl-4"
+        className="hidden w-28 shrink-0 justify-start pl-4 sm:flex"
         active={sortKey === "type"}
         dir={sortDir}
         onClick={() => onSortChange("type")}
@@ -260,7 +260,7 @@ function Header({
         Type
       </SortHeader>
       <SortHeader
-        className="w-32 justify-end"
+        className="hidden w-32 shrink-0 justify-end sm:flex"
         active={sortKey === "modified"}
         dir={sortDir}
         onClick={() => onSortChange("modified")}

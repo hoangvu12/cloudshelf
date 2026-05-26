@@ -192,7 +192,7 @@ function LoaderRow({ loading }: { loading: boolean }) {
     <div className="text-muted-foreground flex h-full items-center justify-center gap-2 font-mono text-[11px]">
       {loading ? (
         <>
-          <Loader2 className="text-accent-mauve size-3.5 animate-spin" />
+          <Loader2 className="text-primary-text size-3.5 animate-spin" />
           Loading more...
         </>
       ) : (
@@ -244,7 +244,7 @@ function ObjectTileImpl({
         "group border-border bg-card/40 hover:border-surface-1 hover:bg-muted/50 relative flex h-full cursor-pointer flex-col items-center rounded-lg border text-center select-none",
         compact ? "gap-1.5 p-2" : "gap-2 p-3",
         selected &&
-          "border-accent-mauve/60 bg-muted hover:border-accent-mauve/60"
+          "border-primary-text/60 bg-muted hover:border-primary-text/60"
       )}
     >
       <div

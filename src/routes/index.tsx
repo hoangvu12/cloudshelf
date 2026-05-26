@@ -199,7 +199,7 @@ function BucketsMain({
           description={
             <>
               CloudShelf server isn't responding. Start it with{" "}
-              <code className="bg-muted text-accent-mauve rounded px-1 py-0.5 font-mono text-[11px]">
+              <code className="bg-muted text-primary-text rounded px-1 py-0.5 font-mono text-[11px]">
                 bun run dev:server
               </code>
               .

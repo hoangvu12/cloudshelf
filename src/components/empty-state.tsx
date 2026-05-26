@@ -27,7 +27,7 @@ export function EmptyState({
       )}
     >
       <div className="bg-muted/60 border-border mb-5 flex size-14 items-center justify-center rounded-xl border">
-        <span className="text-accent-mauve [&_svg]:size-6">{icon}</span>
+        <span className="text-primary-text [&_svg]:size-6">{icon}</span>
       </div>
       <h2 className="text-foreground mb-1.5 text-sm font-medium">{title}</h2>
       {description && (

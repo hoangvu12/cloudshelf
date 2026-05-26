@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import {
   ArrowUp,
   CheckCircle2,
+  CheckIcon,
   CloudUpload,
   CornerDownRight,
   Link as LinkIcon,
@@ -21,6 +22,7 @@ import { formatBytes } from "@/lib/format";
 import { fileAppearance } from "@/lib/file-types";
 import { trimTrailingSlash } from "@/lib/object-path";
 import { fetchDownloadUrl } from "@/lib/api/objects";
+import { useCopied } from "@/lib/use-copied";
 import {
   useUploadItem,
   useUploadsStore,
@@ -187,7 +189,7 @@ function Header({
   return (
     <div className="bg-card/90 border-surface-1 flex h-12 shrink-0 items-center justify-between border-b px-4">
       <div className="flex items-center gap-3">
-        <CloudUpload className="text-accent-mauve size-4" />
+        <CloudUpload className="text-primary-text size-4" />
         <span className="text-foreground text-sm font-medium">Transfers</span>
       </div>
       <div className="flex items-center gap-4">
@@ -235,7 +237,7 @@ function StatusSummary({
 }) {
   const parts: React.ReactNode[] = [];
   if (done > 0) parts.push(<span key="d" className="text-success">{done} done</span>);
-  if (active > 0) parts.push(<span key="a" className="text-accent-mauve">{active} active</span>);
+  if (active > 0) parts.push(<span key="a" className="text-primary-text">{active} active</span>);
   if (queued > 0) parts.push(<span key="q" className="text-muted-foreground">{queued} queued</span>);
   if (paused > 0) parts.push(<span key="p" className="text-accent-yellow">{paused} paused</span>);
   if (failed > 0) parts.push(<span key="f" className="text-destructive">{failed} failed</span>);
@@ -440,12 +442,12 @@ function UploadingRow({
       <div>
         <div className="bg-muted mb-2 h-1.5 w-full overflow-hidden rounded-full">
           <div
-            className="bg-accent-mauve relative h-full rounded-full shadow-[0_0_10px_rgba(203,166,247,0.4)] transition-[width] duration-200 ease-linear"
+            className="bg-primary-text relative h-full rounded-full shadow-[0_0_10px_color-mix(in_oklab,_var(--primary-text)_40%,_transparent)] transition-[width] duration-200 ease-linear"
             style={{ width: `${pct}%` }}
           />
         </div>
         <div className="flex items-center justify-between font-mono text-[10px]">
-          <div className="text-accent-mauve font-bold">
+          <div className="text-primary-text font-bold">
             {pct.toFixed(0)}%
             <span className="text-muted-foreground ml-1 font-normal">
               · {formatBytes(item.bytesUploaded)} of {formatBytes(item.size)}
@@ -479,6 +481,7 @@ function UploadingRow({
 function CompletedRow({ item }: { item: UploadItem }) {
   const { Icon, color } = fileAppearance(item.fileName);
   const [copying, setCopying] = React.useState(false);
+  const [copied, flashCopied] = useCopied();
   const handleCopyLink = async () => {
     if (copying) return;
     setCopying(true);
@@ -489,7 +492,7 @@ function CompletedRow({ item }: { item: UploadItem }) {
         item.key
       );
       await navigator.clipboard.writeText(url);
-      toast.success("Link copied", { description: "Expires in 15 minutes" });
+      flashCopied();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Couldn't copy link");
     } finally {
@@ -515,15 +518,31 @@ function CompletedRow({ item }: { item: UploadItem }) {
           <MetaLine item={item} />
         </div>
       </div>
-      <div className="flex shrink-0 items-center gap-1 pl-2 opacity-0 transition-opacity group-hover:opacity-100">
+      <div
+        className={cn(
+          "flex shrink-0 items-center gap-1 pl-2 transition-opacity",
+          copied
+            ? "opacity-100"
+            : "opacity-0 group-hover:opacity-100"
+        )}
+      >
         <button
           type="button"
           onClick={handleCopyLink}
           disabled={copying}
-          className="text-muted-foreground hover:text-accent-blue hover:bg-surface-1 flex items-center gap-1.5 rounded px-2 py-1 font-mono text-xs transition-colors disabled:opacity-50"
+          className={cn(
+            "hover:bg-surface-1 flex items-center gap-1.5 rounded px-2 py-1 font-mono text-xs transition-colors disabled:opacity-50",
+            copied
+              ? "text-success"
+              : "text-muted-foreground hover:text-accent-blue"
+          )}
         >
-          <LinkIcon className="size-3" />
-          {copying ? "Copying..." : "Copy Link"}
+          {copied ? (
+            <CheckIcon className="size-3" />
+          ) : (
+            <LinkIcon className="size-3" />
+          )}
+          {copied ? "Copied" : copying ? "Copying..." : "Copy Link"}
         </button>
       </div>
     </div>
@@ -576,12 +595,12 @@ function PausedRow({
       <div>
         <div className="bg-muted mb-2 h-1.5 w-full overflow-hidden rounded-full">
           <div
-            className="bg-accent-mauve h-full rounded-full shadow-[0_0_10px_rgba(203,166,247,0.4)]"
+            className="bg-primary-text h-full rounded-full shadow-[0_0_10px_color-mix(in_oklab,_var(--primary-text)_40%,_transparent)]"
             style={{ width: `${pct}%` }}
           />
         </div>
         <div className="flex items-center justify-between font-mono text-[10px]">
-          <div className="text-accent-mauve font-bold">
+          <div className="text-primary-text font-bold">
             {pct.toFixed(0)}%
             <span className="text-muted-foreground ml-1 font-normal">
               · {formatBytes(item.bytesUploaded)} of {formatBytes(item.size)}
@@ -757,14 +776,14 @@ function MinimizedPanel({
               strokeLinecap="round"
               className={cn(
                 "transition-[stroke-dashoffset] duration-200 ease-linear",
-                allDone ? "text-success" : "text-accent-mauve"
+                allDone ? "text-success" : "text-primary-text"
               )}
             />
           </svg>
           {allDone ? (
             <CheckCircle2 className="text-success absolute size-3" />
           ) : (
-            <ArrowUp className="text-accent-mauve absolute size-3" />
+            <ArrowUp className="text-primary-text absolute size-3" />
           )}
         </div>
         <div className="min-w-0 flex-1">
@@ -773,7 +792,7 @@ function MinimizedPanel({
             <span
               className={cn(
                 "font-mono text-[10px] font-bold",
-                allDone ? "text-success" : "text-accent-mauve"
+                allDone ? "text-success" : "text-primary-text"
               )}
             >
               {progress.toFixed(0)}%
@@ -783,7 +802,7 @@ function MinimizedPanel({
             <div
               className={cn(
                 "h-full rounded-full transition-[width] duration-200 ease-linear",
-                allDone ? "bg-success" : "bg-accent-mauve"
+                allDone ? "bg-success" : "bg-primary-text"
               )}
               style={{ width: `${progress}%` }}
             />

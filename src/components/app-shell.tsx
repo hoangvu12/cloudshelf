@@ -32,7 +32,7 @@ export function AppShell({
   return (
     <div
       className={cn(
-        "themed-scope bg-background text-foreground selection:bg-accent-mauve/30 flex h-screen w-screen overflow-hidden",
+        "themed-scope bg-background text-foreground selection:bg-primary-text/30 flex h-screen w-screen overflow-hidden",
         className
       )}
     >

@@ -2,6 +2,7 @@ import * as React from "react";
 import { toast } from "sonner";
 import {
   AlertTriangle,
+  CheckIcon,
   ChevronLeft,
   ChevronRight,
   Download,
@@ -20,6 +21,7 @@ import { basename } from "@/lib/object-path";
 import { fetchDownloadUrl, usePreviewUrl } from "@/lib/api/objects";
 import { useObjects } from "@/lib/api/objects";
 import { usePreviewStore } from "@/stores/preview";
+import { useCopied } from "@/lib/use-copied";
 import {
   Drawer,
   DrawerContent,
@@ -84,6 +86,8 @@ export function FilePreviewPanel({
     return () => window.removeEventListener("keydown", onKey);
   }, [openKey, close, next, prev]);
 
+  const [copied, flashCopied] = useCopied();
+
   if (!openKey) return null;
 
   const name = basename(openKey);
@@ -123,7 +127,7 @@ export function FilePreviewPanel({
     try {
       const { url } = await fetchDownloadUrl(connectionId, bucket, openKey);
       await navigator.clipboard.writeText(url);
-      toast.success("Link copied", { description: "Expires in 15 minutes" });
+      flashCopied();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Couldn't copy link");
     }
@@ -167,8 +171,18 @@ export function FilePreviewPanel({
         <ActionBtn icon={<Download className="size-3.5" />} onClick={handleDownload}>
           Download
         </ActionBtn>
-        <ActionBtn icon={<LinkIcon className="size-3.5" />} onClick={handleCopyLink}>
-          Copy link
+        <ActionBtn
+          icon={
+            copied ? (
+              <CheckIcon className="text-success size-3.5" />
+            ) : (
+              <LinkIcon className="size-3.5" />
+            )
+          }
+          onClick={handleCopyLink}
+          className={copied ? "text-success" : undefined}
+        >
+          {copied ? "Copied" : "Copy link"}
         </ActionBtn>
         <ActionBtn icon={<ExternalLink className="size-3.5" />} onClick={handleOpen}>
           Open
@@ -200,13 +214,13 @@ export function FilePreviewDrawer({
 
   return (
     <Drawer
-      direction="right"
+      direction="bottom"
       open={!!openKey}
       onOpenChange={(o) => {
         if (!o) close();
       }}
     >
-      <DrawerContent>
+      <DrawerContent className="h-[88vh] max-h-[88vh]">
         <DrawerTitle className="sr-only">File preview</DrawerTitle>
         <FilePreviewPanel
           connectionId={connectionId}

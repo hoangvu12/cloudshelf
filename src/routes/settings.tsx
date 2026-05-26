@@ -143,7 +143,7 @@ function SettingsNav({
               className={cn(
                 "flex items-center gap-3 border-l-2 px-4 py-2.5 text-left text-sm font-medium transition-colors",
                 active === item.id
-                  ? "border-accent-mauve bg-muted text-accent-mauve"
+                  ? "border-primary-text bg-muted text-primary-text"
                   : "text-muted-foreground hover:bg-muted border-transparent hover:text-foreground"
               )}
             >
@@ -166,7 +166,7 @@ function AppearanceSection() {
   const setDensity = usePrefsStore((s) => s.setDensity);
 
   return (
-    <SectionShell title="Appearance settings" accent="mauve">
+    <SectionShell title="Appearance settings">
       <SettingRow
         label="Default view"
         description="How files are displayed when you open a bucket."
@@ -234,7 +234,7 @@ function UploadsSection() {
   const patch = usePrefsStore((s) => s.patch);
 
   return (
-    <SectionShell title="Transfer settings" accent="blue">
+    <SectionShell title="Transfer settings">
       <SettingRow
         label="Multipart chunk size"
         description="Size of parts for large file uploads."
@@ -323,7 +323,7 @@ function ProfilesSection({
         <button
           type="button"
           onClick={() => navigate({ to: "/setup" })}
-          className="bg-input-bg border-surface-1 hover:border-accent-mauve hover:text-accent-mauve text-foreground flex items-center gap-2 rounded border px-3 py-1.5 font-mono text-xs transition-colors"
+          className="bg-input-bg border-surface-1 hover:border-primary-text hover:text-primary-text text-foreground flex items-center gap-2 rounded border px-3 py-1.5 font-mono text-xs transition-colors"
         >
           <Plus className="size-3.5" /> Add profile
         </button>
@@ -343,7 +343,7 @@ function ProfilesSection({
             className={cn(
               "group flex items-center justify-between rounded-lg border p-4",
               isActive
-                ? "border-accent-mauve/50 bg-muted/30"
+                ? "border-primary-text/50 bg-muted/30"
                 : "border-border bg-input-bg/50 hover:border-surface-1"
             )}
           >
@@ -416,7 +416,7 @@ function ProfileIcon({
     <Icon
       className={cn(
         "size-6 shrink-0",
-        active ? "text-accent-mauve" : "text-muted-foreground"
+        active ? "text-primary-text" : "text-muted-foreground"
       )}
     />
   );
@@ -447,7 +447,7 @@ function ProfileBadge({
 
 function KeyboardSection() {
   return (
-    <SectionShell title="Keyboard shortcuts" accent="green">
+    <SectionShell title="Keyboard shortcuts">
       <div className="border-border bg-card/50 overflow-hidden rounded-lg border">
         <div className="bg-muted/30 border-border text-muted-foreground grid grid-cols-2 border-b p-3 font-mono text-xs font-bold tracking-wider uppercase">
           <div>Shortcut</div>
@@ -485,11 +485,11 @@ function AboutSection() {
   };
 
   return (
-    <SectionShell title="System information" accent="mauve">
+    <SectionShell title="System information">
       <div className="bg-card/80 border-border flex flex-col gap-6 rounded-lg border p-5 sm:flex-row sm:justify-between">
         <div>
           <h3 className="text-foreground flex items-center gap-2 text-xl font-bold">
-            <Cloud className="text-accent-mauve size-6" />
+            <Cloud className="text-primary-text size-6" />
             CloudShelf
           </h3>
           <p className="text-muted-foreground mt-1 font-mono text-xs">
@@ -581,27 +581,14 @@ function ExternalLink({
 
 function SectionShell({
   title,
-  accent,
   children,
 }: {
   title: string;
-  accent: "mauve" | "blue" | "peach" | "green";
   children: React.ReactNode;
 }) {
-  const accentClass = {
-    mauve: "text-accent-mauve",
-    blue: "text-accent-blue",
-    peach: "text-accent-peach",
-    green: "text-accent-green",
-  }[accent];
   return (
     <div className="space-y-6">
-      <h2
-        className={cn(
-          "border-border border-b pb-2 font-mono text-[10px] font-bold tracking-widest uppercase",
-          accentClass
-        )}
-      >
+      <h2 className="border-border text-primary-text border-b pb-2 font-mono text-[10px] font-bold tracking-widest uppercase">
         {title}
       </h2>
       {children}
@@ -653,7 +640,7 @@ function SettingToggleRow({
           className={cn(
             "relative h-[18px] w-8 shrink-0 rounded-full border transition-colors",
             checked
-              ? "border-accent-mauve bg-accent-mauve"
+              ? "border-primary-text bg-primary-text"
               : "border-surface-1 bg-muted"
           )}
         >

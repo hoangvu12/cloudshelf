@@ -31,7 +31,7 @@ export { default as CornerDownRight } from "@material-symbols/svg-400/outlined/s
 export { default as Home } from "@material-symbols/svg-400/outlined/home-fill.svg?react";
 export { default as Search } from "@material-symbols/svg-400/outlined/search-fill.svg?react";
 export { default as MoreHorizontal } from "@material-symbols/svg-400/outlined/more_horiz-fill.svg?react";
-export { default as Pin } from "@material-symbols/svg-400/outlined/pin-fill.svg?react";
+export { default as Pin } from "@material-symbols/svg-400/outlined/keep-fill.svg?react";
 
 // Folder/file chrome (not the colorful per-type folder icons — those are in
 // folder-icons.ts. These are for breadcrumbs, "create folder" actions, empty

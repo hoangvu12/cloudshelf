@@ -1,5 +1,6 @@
 import * as React from "react";
 import {
+  CheckIcon,
   CheckSquare,
   Download,
   Eye,
@@ -15,6 +16,7 @@ import {
 import { cn } from "@/lib/utils";
 import { formatBytes, formatCount } from "@/lib/format";
 import { Button } from "@/components/ui/button";
+import { useCopied } from "@/lib/use-copied";
 
 /**
  * Two-mode toolbar that morphs based on selection state:
@@ -57,7 +59,8 @@ export function ObjectToolbar({
   /** True when exactly one file (not folder) is selected. */
   canPreview: boolean;
   onDownloadSelected: () => void;
-  onCopyLink: () => void;
+  /** Resolves true on successful copy so the button can show inline feedback. */
+  onCopyLink: () => Promise<boolean>;
   onMove: () => void;
   onRename: () => void;
   onDelete: () => void;
@@ -69,24 +72,30 @@ export function ObjectToolbar({
   // Copy-link is single-file only (folders don't have a presignable target).
   const canCopyLink = selectedCount === 1;
 
+  const [copied, flashCopied] = useCopied();
+  const handleCopyLinkClick = async () => {
+    const ok = await onCopyLink();
+    if (ok) flashCopied();
+  };
+
   return (
     <div
       className={cn(
-        "border-border relative flex h-14 shrink-0 items-center justify-between gap-4 border-b px-4 transition-colors",
+        "border-border relative flex h-14 shrink-0 items-center justify-between gap-2 border-b px-4 transition-colors sm:gap-4",
         isSelectionMode && "bg-muted/30",
         className
       )}
     >
       {isSelectionMode ? (
-        <div className="flex items-center gap-4">
-          <div className="bg-accent-mauve/20 text-accent-mauve border-accent-mauve/30 flex items-center gap-2 rounded border px-2 py-1 font-mono text-xs font-bold">
-            <CheckSquare className="size-3.5" />
+        <div className="flex shrink-0 items-center gap-3 sm:gap-4">
+          <div className="bg-primary-text/20 text-primary-text border-primary-text/30 flex shrink-0 items-center gap-2 rounded border px-2 py-1 font-mono text-xs font-bold whitespace-nowrap">
+            <CheckSquare className="size-3.5 shrink-0" />
             {selectedCount} selected
           </div>
           <button
             type="button"
             onClick={onClearSelection}
-            className="text-muted-foreground hover:text-foreground font-mono text-[11px] underline underline-offset-2"
+            className="text-muted-foreground hover:text-foreground shrink-0 font-mono text-[11px] underline underline-offset-2"
           >
             Clear
           </button>
@@ -104,9 +113,9 @@ export function ObjectToolbar({
         </div>
       )}
 
-      <div className="flex items-center gap-3">
+      <div className="flex min-w-0 items-center gap-3">
         {isSelectionMode ? (
-          <div className="flex items-center gap-1 font-mono text-xs">
+          <div className="-mx-2 flex min-w-0 items-center gap-1 overflow-x-auto px-2 font-mono text-xs [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
             <ActionButton
               onClick={onPreview}
               icon={<Eye className="text-accent-mauve" />}
@@ -119,12 +128,19 @@ export function ObjectToolbar({
               Download
             </ActionButton>
             <ActionButton
-              onClick={onCopyLink}
-              icon={<LinkIcon className="text-accent-sapphire" />}
+              onClick={handleCopyLinkClick}
+              icon={
+                copied ? (
+                  <CheckIcon className="text-success" />
+                ) : (
+                  <LinkIcon className="text-accent-sapphire" />
+                )
+              }
               disabled={!canCopyLink}
               title={canCopyLink ? undefined : "Select a single file"}
+              className={copied ? "text-success" : undefined}
             >
-              Copy link
+              {copied ? "Copied" : "Copy link"}
             </ActionButton>
             <ActionButton onClick={onMove} icon={<FolderOutput className="text-accent-yellow" />}>
               Move
@@ -137,7 +153,7 @@ export function ObjectToolbar({
             >
               Rename
             </ActionButton>
-            <div className="bg-surface-1 mx-1 h-4 w-px" />
+            <div className="bg-surface-1 mx-1 h-4 w-px shrink-0" />
             <ActionButton onClick={onDelete} icon={<Trash2 />} destructive>
               Delete
             </ActionButton>
@@ -151,7 +167,7 @@ export function ObjectToolbar({
         )}
 
         {!isSelectionMode && (
-          <div className="text-muted-foreground flex gap-3 font-mono text-[11px]">
+          <div className="text-muted-foreground hidden gap-3 font-mono text-[11px] whitespace-nowrap md:flex">
             <span>{formatCount(totalCount)} items</span>
             <span className="text-muted-foreground">|</span>
             <span>{formatBytes(totalBytes)} total</span>
@@ -180,7 +196,7 @@ function FilterInput({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder="Search in folder..."
-        className="bg-input-bg border-border text-foreground focus:border-accent-mauve placeholder:text-surface-1 w-48 rounded border py-1.5 pr-3 pl-8 font-mono text-xs transition-colors focus:outline-none"
+        className="bg-input-bg border-border text-foreground focus:border-primary-text placeholder:text-surface-1 w-48 rounded border py-1.5 pr-3 pl-8 font-mono text-xs transition-colors focus:outline-none"
       />
     </div>
   );
@@ -193,13 +209,15 @@ function ActionButton({
   destructive,
   disabled,
   title,
+  className,
 }: {
-  onClick: () => void;
+  onClick: () => unknown;
   icon: React.ReactNode;
   children: React.ReactNode;
   destructive?: boolean;
   disabled?: boolean;
   title?: string;
+  className?: string;
 }) {
   return (
     <button
@@ -208,11 +226,12 @@ function ActionButton({
       disabled={disabled}
       title={title}
       className={cn(
-        "flex items-center gap-1.5 rounded px-2.5 py-1.5 focus:outline-none",
+        "flex shrink-0 items-center gap-1.5 rounded px-2.5 py-1.5 whitespace-nowrap focus:outline-none",
         destructive
           ? "text-destructive hover:bg-destructive/20"
           : "text-foreground hover:bg-surface-1",
-        disabled && "cursor-not-allowed opacity-40 hover:bg-transparent"
+        disabled && "cursor-not-allowed opacity-40 hover:bg-transparent",
+        className
       )}
     >
       <span className="[&>svg]:size-3.5">{icon}</span>

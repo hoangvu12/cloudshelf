@@ -284,18 +284,32 @@ export function ObjectBrowser({
     }
   };
 
-  const handleCopyLink = async (entry: S3Entry) => {
+  /**
+   * Returns true on success, false otherwise. Errors toast; success is silent
+   * so callers can choose their own confirmation (inline button feedback vs.
+   * a success toast for the context-menu/shortcut paths that have no button
+   * to highlight).
+   */
+  const copyEntryLink = async (entry: S3Entry): Promise<boolean> => {
     if (entry.type !== "object") {
       toast.info("Folders don't have a shareable link");
-      return;
+      return false;
     }
     try {
       const { url } = await fetchDownloadUrl(connectionId, bucket, entry.key);
       await navigator.clipboard.writeText(url);
-      toast.success("Link copied", { description: "Expires in 15 minutes" });
+      return true;
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Couldn't copy link");
+      return false;
     }
+  };
+
+  // Context-menu / ⌘C path — no on-screen button to flip into a "Copied"
+  // state, so we surface success via toast instead.
+  const handleCopyLink = async (entry: S3Entry) => {
+    const ok = await copyEntryLink(entry);
+    if (ok) toast.success("Link copied", { description: "Expires in 15 minutes" });
   };
 
   // ─── Upload flow ────────────────────────────────────────────────────────
@@ -559,9 +573,9 @@ export function ObjectBrowser({
     setRenameTarget(selectedEntries[0]!);
     setRenameOpen(true);
   };
-  const handleCopyLinkFromToolbar = () => {
-    if (selectedEntries.length !== 1) return;
-    handleCopyLink(selectedEntries[0]!);
+  const handleCopyLinkFromToolbar = async (): Promise<boolean> => {
+    if (selectedEntries.length !== 1) return false;
+    return copyEntryLink(selectedEntries[0]!);
   };
   const handlePreviewFromToolbar = () => {
     const only = selectedEntries.length === 1 ? selectedEntries[0]! : null;
@@ -811,14 +825,21 @@ export function ObjectBrowser({
               </span>
               <span>{formatBytes(totalBytes)} total</span>
               {selectedIds.size > 0 && (
-                <span className="text-accent-mauve">
+                <span className="text-primary-text">
                   {selectedIds.size} selected
                 </span>
               )}
             </>
           ) : null
         }
-        right={<span>⌘K to search · shift-click for range · drag to upload</span>}
+        right={
+          <>
+            <span className="whitespace-nowrap">⌘K to search</span>
+            <span className="hidden whitespace-nowrap md:inline">
+              · shift-click for range · drag to upload
+            </span>
+          </>
+        }
       />
 
       <NewFolderDialog

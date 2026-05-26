@@ -80,11 +80,11 @@ function BucketListHeaders() {
   return (
     <div className="border-border text-foreground bg-card/30 flex shrink-0 border-b px-4 py-2 text-[11px] font-bold tracking-wider uppercase">
       <div className="w-8 shrink-0" />
-      <div className="flex-1">Name</div>
-      <div className="w-24 text-right">Size</div>
-      <div className="w-24 text-right">Items</div>
-      <div className="w-32 text-right">Modified</div>
-      <div className="w-16" />
+      <div className="min-w-0 flex-1">Name</div>
+      <div className="w-20 text-right sm:w-24">Size</div>
+      <div className="hidden w-24 text-right md:block">Items</div>
+      <div className="hidden w-32 text-right sm:block">Modified</div>
+      <div className="hidden w-16 sm:block" />
     </div>
   );
 }
@@ -104,6 +104,17 @@ function BucketRow({
 }) {
   const { Icon, accent } = bucketAppearance(bucket.name);
 
+  // Track toggle to fire a brief scale-pop on the pin icons. The animation key
+  // changes on every flip after initial mount so the CSS animation re-runs.
+  const [popKey, setPopKey] = React.useState(0);
+  const prevPinned = React.useRef(pinned);
+  React.useEffect(() => {
+    if (prevPinned.current === pinned) return;
+    prevPinned.current = pinned;
+    setPopKey((k) => k + 1);
+  }, [pinned]);
+  const popClass = popKey > 0 ? "animate-scale-pop" : "";
+
   return (
     <div
       onClick={() => onOpen?.(bucket.name)}
@@ -113,11 +124,13 @@ function BucketRow({
       )}
     >
       <div className="text-accent-yellow flex w-8 shrink-0 items-center justify-center">
-        {pinned && <Pin className="fill-accent-yellow size-3" />}
+        {pinned && (
+          <Pin key={popKey} className={cn("fill-accent-yellow size-3", popClass)} />
+        )}
       </div>
 
-      <div className="flex flex-1 items-center gap-3">
-        <Icon className={cn("size-5", accent)} />
+      <div className="flex min-w-0 flex-1 items-center gap-3">
+        <Icon className={cn("size-5 shrink-0", accent)} />
         <span
           className={cn(
             "text-foreground truncate text-sm",
@@ -128,11 +141,13 @@ function BucketRow({
         </span>
       </div>
 
-      <Cell>{formatBytes(bucket.sizeBytes)}</Cell>
-      <Cell>{formatCount(bucket.objectCount)}</Cell>
-      <Cell width="w-32">{formatFileTime(bucket.createdAt)}</Cell>
+      <Cell width="w-20 sm:w-24">{formatBytes(bucket.sizeBytes)}</Cell>
+      <Cell className="hidden md:block">{formatCount(bucket.objectCount)}</Cell>
+      <Cell width="w-32" className="hidden sm:block">
+        {formatFileTime(bucket.createdAt)}
+      </Cell>
 
-      <div className="row-actions flex w-16 justify-end gap-2 opacity-0 transition-opacity group-hover:opacity-100">
+      <div className="row-actions hidden w-16 justify-end gap-2 opacity-0 transition-opacity group-hover:opacity-100 sm:flex">
         <button
           type="button"
           aria-label={pinned ? "Unpin bucket" : "Pin bucket"}
@@ -148,7 +163,10 @@ function BucketRow({
               : "text-muted-foreground hover:text-accent-yellow"
           )}
         >
-          <Pin className={cn("size-3.5", pinned && "fill-accent-yellow")} />
+          <Pin
+            key={popKey}
+            className={cn("size-3.5", pinned && "fill-accent-yellow", popClass)}
+          />
         </button>
         <button
           type="button"
@@ -166,12 +184,20 @@ function BucketRow({
 function Cell({
   children,
   width = "w-24",
+  className,
 }: {
   children: React.ReactNode;
   width?: string;
+  className?: string;
 }) {
   return (
-    <div className={cn("text-muted-foreground text-right font-mono text-xs", width)}>
+    <div
+      className={cn(
+        "text-muted-foreground shrink-0 truncate text-right font-mono text-xs whitespace-nowrap",
+        width,
+        className
+      )}
+    >
       {children}
     </div>
   );

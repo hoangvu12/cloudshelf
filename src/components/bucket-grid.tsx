@@ -111,11 +111,20 @@ function BucketCard({
   const { Icon, accent } = bucketAppearance(bucket.name);
   const compact = density === "compact";
 
+  const [popKey, setPopKey] = React.useState(0);
+  const prevPinned = React.useRef(pinned);
+  React.useEffect(() => {
+    if (prevPinned.current === pinned) return;
+    prevPinned.current = pinned;
+    setPopKey((k) => k + 1);
+  }, [pinned]);
+  const popClass = popKey > 0 ? "animate-scale-pop" : "";
+
   return (
     <div
       onClick={() => onOpen?.(bucket.name)}
       className={cn(
-        "group bg-card/40 border-border hover:border-accent-mauve/60 hover:bg-muted/30 relative flex cursor-pointer flex-col rounded-lg border",
+        "group bg-card/40 border-border hover:border-primary/60 hover:bg-muted/30 relative flex cursor-pointer flex-col rounded-lg border",
         compact ? "gap-2 p-3" : "gap-3 p-4"
       )}
     >
@@ -125,7 +134,10 @@ function BucketCard({
         />
         <div className="flex items-center gap-1">
           {pinned && (
-            <Pin className="fill-accent-yellow text-accent-yellow size-3" />
+            <Pin
+              key={popKey}
+              className={cn("fill-accent-yellow text-accent-yellow size-3", popClass)}
+            />
           )}
           <button
             type="button"
@@ -176,7 +188,10 @@ function BucketCard({
           pinned ? "text-accent-yellow" : "text-muted-foreground hover:text-accent-yellow opacity-0 group-hover:opacity-100"
         )}
       >
-        <Pin className={cn("size-3.5", pinned && "fill-accent-yellow")} />
+        <Pin
+          key={popKey}
+          className={cn("size-3.5", pinned && "fill-accent-yellow", popClass)}
+        />
       </button>
     </div>
   );

@@ -54,11 +54,11 @@ export function UploadDropzone({
             "bg-input-bg/80 backdrop-blur-sm transition-opacity"
           )}
         >
-          <div className="border-accent-mauve bg-accent-mauve/5 flex h-full w-full flex-col items-center justify-center rounded-xl border-2 border-dashed shadow-[0_0_50px_rgba(203,166,247,0.1)]">
-            <div className="bg-accent-mauve/20 mb-6 flex size-20 animate-bounce-3 items-center justify-center rounded-full">
-              <UploadCloud className="text-accent-mauve size-10" />
+          <div className="border-primary-text bg-primary-text/5 flex h-full w-full flex-col items-center justify-center rounded-xl border-2 border-dashed shadow-[0_0_50px_color-mix(in_oklab,_var(--primary-text)_10%,_transparent)]">
+            <div className="bg-primary-text/20 mb-6 flex size-20 animate-bounce-3 items-center justify-center rounded-full">
+              <UploadCloud className="text-primary-text size-10" />
             </div>
-            <h2 className="text-accent-mauve mb-2 text-xl font-bold">
+            <h2 className="text-primary-text mb-2 text-xl font-bold">
               Drop files here to upload
             </h2>
             <p className="text-muted-foreground font-mono text-xs">

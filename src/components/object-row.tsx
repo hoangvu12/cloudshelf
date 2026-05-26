@@ -107,13 +107,15 @@ function ObjectRowImpl({
         </span>
       </div>
 
-      <Cell className="w-24 text-right">
-        <span className={selected ? "text-accent-mauve" : undefined}>
+      <Cell className="w-20 shrink-0 text-right whitespace-nowrap sm:w-24">
+        <span className={selected ? "text-primary-text" : undefined}>
           {isFolder ? "--" : formatBytes(entry.size)}
         </span>
       </Cell>
-      <Cell className="w-28 pl-4 text-left">{fileLabel}</Cell>
-      <Cell className="w-32 text-right">
+      <Cell className="hidden w-28 shrink-0 pl-4 text-left whitespace-nowrap sm:block">
+        {fileLabel}
+      </Cell>
+      <Cell className="hidden w-32 shrink-0 text-right whitespace-nowrap sm:block">
         {isFolder ? "--" : formatFileTime(entry.lastModified)}
       </Cell>
     </div>

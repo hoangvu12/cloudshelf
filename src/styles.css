@@ -44,6 +44,12 @@
      with white. Mocha uses Latte-flavor mauve since the lighter Mocha mauve
      fails contrast on primary surfaces. */
   --palette-primary: #8839ef;
+  /* Readable foreground variant of `--palette-primary` — same hue family but
+     bright enough to use as TEXT on the dark body bg. The dark `--palette-
+     primary` above is tuned for buttons (white text on it); using it as text
+     itself fails contrast on the same dark bg. Mocha primary is purple →
+     bright mauve serves as its text variant. */
+  --palette-primary-text: #cba6f7;
   --palette-red: #f38ba8;
   --palette-maroon: #eba0ac;
   --palette-peach: #fab387;
@@ -87,6 +93,7 @@
   /* Tokyo Night's editor identity is blue (#7aa2f7) — use a darker shade
      so primary surfaces with white text clear WCAG AA. */
   --palette-primary: #3d59a1;
+  --palette-primary-text: #7aa2f7;
   --palette-red: #f7768e;
   --palette-maroon: #db4b4b;
   --palette-peach: #ff9e64;
@@ -124,6 +131,7 @@
   /* Nord's identity is frost (the four cyans). Darker frost-3 so primary
      surfaces with white text clear WCAG AA. */
   --palette-primary: #3e5a76;
+  --palette-primary-text: #88c0d0;
   --palette-red: #bf616a;
   --palette-maroon: #a14e57;
   --palette-peach: #d08770;
@@ -157,6 +165,7 @@
   /* Catppuccin Latte mauve — same identity color across all Catppuccin
      flavors so the brand reads consistently. */
   --palette-primary: #7c2dd0;
+  --palette-primary-text: #c6a0f6;
   --palette-red: #ed8796;
   --palette-maroon: #ee99a0;
   --palette-peach: #f5a97f;
@@ -190,6 +199,7 @@
   --palette-mauve: #c4a7e7;
   /* Rosé Pine's canonical primary is iris (purple). */
   --palette-primary: #6e3275;
+  --palette-primary-text: #c4a7e7;
   --palette-red: #eb6f92;
   --palette-maroon: #c95576;
   --palette-peach: #e89668;
@@ -221,6 +231,7 @@
   --palette-mauve: #c4a7e7;
   /* Rosé Pine's canonical primary is iris (purple). */
   --palette-primary: #6e3275;
+  --palette-primary-text: #c4a7e7;
   --palette-red: #eb6f92;
   --palette-maroon: #c95576;
   --palette-peach: #e89668;
@@ -259,6 +270,7 @@
   /* LilyPichu's identity is rose, not purple — a deep love-pink reads as
      "of the theme" instead of feeling like an arbitrary purple stamp. */
   --palette-primary: #8e2d50;
+  --palette-primary-text: #ea9ab8;
   --palette-red: #c95876;
   --palette-maroon: #a83e5d;
   --palette-peach: #d68b6c;
@@ -292,6 +304,7 @@
   /* Gruvbox's signature primary is dark orange — sets Vencord apart from
      the purple-leaning themes. */
   --palette-primary: #af3a03;
+  --palette-primary-text: #e78a4e;
   --palette-red: #ea6962;
   --palette-maroon: #c25c55;
   --palette-peach: #e78a4e;
@@ -320,6 +333,10 @@
   --popover-foreground: var(--palette-text);
   --primary: var(--palette-primary);
   --primary-foreground: #ffffff;
+  /* Use this when the primary color needs to be the foreground (text/icon
+     on the body bg) — `--primary` itself is tuned for primary surfaces with
+     white text on top, so it's typically too dark for foreground use. */
+  --primary-text: var(--palette-primary-text);
   --secondary: var(--palette-surface0);
   --secondary-foreground: var(--palette-text);
   --muted: var(--palette-surface0);
@@ -393,6 +410,7 @@
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-primary-text: var(--primary-text);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
@@ -527,6 +545,18 @@
   animation: bounce-3 1s ease-in-out 3;
 }
 
+/* Brief scale-punch — used as inline acknowledgement when a toggle button's
+   on/off state flips (e.g., pin/unpin). Overshoot ease (back-out) makes the
+   click feel satisfying without lasting long enough to be distracting. */
+@keyframes scale-pop {
+  0% { transform: scale(0.6); }
+  60% { transform: scale(1.25); }
+  100% { transform: scale(1); }
+}
+@utility animate-scale-pop {
+  animation: scale-pop 280ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
 /* Scoped scrollbar — applies only inside the buckets browser shell so the
    setup form keeps the default theme scrollbar. */
 .themed-scope ::-webkit-scrollbar {
@@ -543,4 +573,64 @@
 }
 .themed-scope ::-webkit-scrollbar-thumb:hover {
   background: var(--surface-1);
+}
+
+/* ── Sonner toast styling ────────────────────────────────────────────────────
+   Sonner ships its own CSS scoped to `[data-sonner-toaster]` / `[data-sonner-
+   toast]` with high enough specificity that Tailwind utilities lose. We
+   override directly on the data attributes so the toast picks up our palette
+   tokens regardless of which theme is active.
+
+   Differentiation pattern: neutral popover bg + colored icon (set in
+   sonner.tsx) + a 3px left accent bar driven by `data-type`. Title sits in
+   `--foreground`, description in `--muted-foreground` for hierarchy. */
+[data-sonner-toaster][data-theme] {
+  --normal-bg: var(--popover);
+  --normal-text: var(--popover-foreground);
+  --normal-border: var(--border);
+  --border-radius: var(--radius);
+}
+
+[data-sonner-toast] {
+  background: var(--popover) !important;
+  color: var(--popover-foreground) !important;
+  border: 1px solid var(--border) !important;
+  border-left-width: 3px !important;
+  border-left-color: var(--border) !important;
+  box-shadow: 0 10px 30px -10px rgb(0 0 0 / 0.4) !important;
+}
+
+[data-sonner-toast] [data-title] {
+  color: var(--foreground);
+  font-weight: 500;
+}
+
+[data-sonner-toast] [data-description] {
+  color: var(--muted-foreground);
+}
+
+[data-sonner-toast] [data-close-button] {
+  background: var(--popover) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--muted-foreground) !important;
+}
+[data-sonner-toast] [data-close-button]:hover {
+  color: var(--foreground) !important;
+  background: var(--muted) !important;
+}
+
+[data-sonner-toast][data-type="success"] {
+  border-left-color: var(--success) !important;
+}
+[data-sonner-toast][data-type="error"] {
+  border-left-color: var(--destructive) !important;
+}
+[data-sonner-toast][data-type="warning"] {
+  border-left-color: var(--accent-yellow) !important;
+}
+[data-sonner-toast][data-type="info"] {
+  border-left-color: var(--info) !important;
+}
+[data-sonner-toast][data-type="loading"] {
+  border-left-color: var(--primary-text) !important;
 }
