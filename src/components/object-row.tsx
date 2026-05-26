@@ -39,11 +39,13 @@ export interface RowClickModifiers {
 function ObjectRowImpl({
   entry,
   currentPrefix,
+  compact = false,
   onSelectRow,
   onOpen,
 }: {
   entry: S3Entry;
   currentPrefix: string;
+  compact?: boolean;
   onSelectRow: (entry: S3Entry, mods: RowClickModifiers) => void;
   onOpen: (entry: S3Entry) => void;
 }) {
@@ -71,7 +73,8 @@ function ObjectRowImpl({
     <div
       onClick={handleRowClick}
       className={cn(
-        "group flex h-9 cursor-pointer items-center rounded px-2 select-none",
+        "group flex cursor-pointer items-center rounded px-2 select-none",
+        compact ? "h-7" : "h-9",
         selected ? "bg-ctp-surface0" : "hover:bg-ctp-surface0/60"
       )}
     >

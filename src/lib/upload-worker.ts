@@ -10,6 +10,7 @@ import {
   LIST_PRIORITY,
   PART_PRIORITY,
 } from "./upload-queue";
+import { usePrefsStore } from "@/stores/prefs";
 
 /**
  * Upload worker — runs one file to completion via either a single PUT or S3
@@ -49,14 +50,9 @@ const PART_RETRY_DELAYS_MS = [0, 1000, 3000, 5000];
 const PART_MAX_ATTEMPTS = 5;
 
 // Multipart sizing — S3 requires ≥5 MB per part (except the last), ≤10k parts.
-// 5 MB minimum is what Uppy defaults to as well.
-const DEFAULT_PART_SIZE = 5 * 1024 * 1024;
+// 5 MB is the floor; the configured chunk size from settings can raise it.
+const MIN_PART_SIZE = 5 * 1024 * 1024;
 const MAX_PARTS = 10_000;
-/** Per-file part-worker count. The real rate limiter is the global queue's
- *  6-slot cap; this just sets how many workers a single file may spawn so it
- *  can fully consume those slots when running alone. With multiple active
- *  files, their workers fairly contend for slots in the global queue. */
-const PART_CONCURRENCY = 6;
 
 export async function runUpload(id: string): Promise<void> {
   const item = useUploadsStore.getState().items[id];
@@ -284,9 +280,11 @@ async function bootstrapMultipart(
 }
 
 function pickPartSize(fileSize: number): number {
-  // Same shape as Uppy's getChunkSize default: keep parts at the 5 MB minimum
-  // until the file is too big to fit in 10k parts, then grow proportionally.
-  return Math.max(DEFAULT_PART_SIZE, Math.ceil(fileSize / MAX_PARTS));
+  // User-configured chunk size from settings, floored at S3's 5 MB minimum,
+  // then grown if the file would exceed S3's 10k-part cap at that size.
+  const configured = usePrefsStore.getState().multipartPartSize;
+  const base = Math.max(MIN_PART_SIZE, configured);
+  return Math.max(base, Math.ceil(fileSize / MAX_PARTS));
 }
 
 function buildParts(size: number, partSize: number): UploadPart[] {
@@ -351,8 +349,9 @@ function runPartPool({
       partBytes[task.index] = task.part.size;
     }
   };
+  const concurrency = usePrefsStore.getState().concurrentParts;
   const workers = Array.from(
-    { length: Math.min(PART_CONCURRENCY, pending.length || 1) },
+    { length: Math.min(concurrency, pending.length || 1) },
     worker
   );
   return Promise.all(workers).then(() => undefined);

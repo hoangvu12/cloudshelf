@@ -54,7 +54,7 @@ const PLACES: PlaceItem[] = [
     ),
   },
   { label: "Shared links", icon: <LinkIcon className="size-4" />, accent: "green" },
-  { label: "Settings", to: "/setup", icon: <Settings className="size-4" />, accent: "subtext" },
+  { label: "Settings", to: "/settings", icon: <Settings className="size-4" />, accent: "subtext" },
 ];
 
 export function AppSidebar({

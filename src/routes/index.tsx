@@ -5,6 +5,7 @@ import { FolderX, Plug, ServerCrash, ServerOff } from "lucide-react";
 import { AppShell, AppStatusBar } from "@/components/app-shell";
 import { AppSidebar } from "@/components/app-sidebar";
 import { BucketList } from "@/components/bucket-list";
+import { BucketGrid } from "@/components/bucket-grid";
 import {
   CommandPalette,
   useCommandPaletteShortcut,
@@ -16,6 +17,7 @@ import { useConnections } from "@/lib/api/connections";
 import { formatBytes, formatCount } from "@/lib/format";
 import { useActiveConnectionStore } from "@/stores/active-connection";
 import { usePinnedBucketsStore } from "@/stores/pinned-buckets";
+import { usePrefsStore } from "@/stores/prefs";
 import type { Bucket } from "@server/types";
 
 export const Route = createFileRoute("/")({
@@ -242,17 +244,26 @@ function BucketsMain({
       );
 
     case "ok":
-      return (
-        <BucketList
-          buckets={buckets}
-          pinnedNames={pinnedNames}
-          filter={filter}
-          sortKey="name"
-          onTogglePin={onTogglePin}
-          onOpenBucket={onOpenBucket}
-        />
-      );
+      return <BucketsRenderer
+        buckets={buckets}
+        pinnedNames={pinnedNames}
+        filter={filter}
+        onTogglePin={onTogglePin}
+        onOpenBucket={onOpenBucket}
+      />;
   }
+}
+
+function BucketsRenderer(props: {
+  buckets: Bucket[];
+  pinnedNames: Set<string>;
+  filter: string;
+  onTogglePin: (name: string) => void;
+  onOpenBucket: (name: string) => void;
+}) {
+  const viewMode = usePrefsStore((s) => s.viewMode);
+  const Component = viewMode === "grid" ? BucketGrid : BucketList;
+  return <Component {...props} sortKey="name" />;
 }
 
 function BucketsLoading() {

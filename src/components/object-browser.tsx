@@ -17,6 +17,7 @@ import {
   ObjectList,
   type ContextAction,
 } from "@/components/object-list";
+import { ObjectGrid } from "@/components/object-grid";
 import type { RowClickModifiers } from "@/components/object-row";
 import { ObjectToolbar } from "@/components/object-toolbar";
 import { UploadDropzone } from "@/components/upload-dropzone";
@@ -43,6 +44,7 @@ import {
 } from "@/lib/api/objects";
 import { useSelectionStore } from "@/stores/selection";
 import { usePreviewStore } from "@/stores/preview";
+import { usePrefsStore } from "@/stores/prefs";
 import { onUploadCompleted, useUploadsStore } from "@/stores/uploads";
 import type { S3Entry, S3ObjectEntry } from "@server/types";
 
@@ -318,8 +320,35 @@ export function ObjectBrowser({
         `${oversized.length} file${oversized.length === 1 ? "" : "s"} exceed S3's 5 TB per-object limit`
       );
     }
-    const accepted = files.filter((f) => f.size <= MAX_UPLOAD_BYTES);
+    let accepted = files.filter((f) => f.size <= MAX_UPLOAD_BYTES);
     if (accepted.length === 0) return;
+
+    // Best-effort overwrite check against the currently-loaded listing.
+    // Doesn't catch collisions in not-yet-fetched pages or other clients
+    // creating keys concurrently, but covers the common case.
+    if (usePrefsStore.getState().overwriteWarning) {
+      const existingNames = new Set(
+        entries
+          .filter((e): e is S3ObjectEntry => e.type === "object")
+          .map((e) => basename(e.key))
+      );
+      const colliders = accepted.filter((f) => existingNames.has(f.name));
+      if (colliders.length > 0) {
+        const sample = colliders
+          .slice(0, 5)
+          .map((f) => `  • ${f.name}`)
+          .join("\n");
+        const more =
+          colliders.length > 5 ? `\n  …and ${colliders.length - 5} more` : "";
+        const ok = window.confirm(
+          `${colliders.length} file${colliders.length === 1 ? "" : "s"} already exist in this folder. Overwrite?\n\n${sample}${more}`
+        );
+        if (!ok) {
+          accepted = accepted.filter((f) => !existingNames.has(f.name));
+          if (accepted.length === 0) return;
+        }
+      }
+    }
 
     useUploadsStore.getState().actions.addFiles(
       { connectionId, bucket, prefix: normalizedPrefix },
@@ -745,7 +774,7 @@ function BrowserBody({
   }
 
   return (
-    <ObjectList
+    <BodyRenderer
       visible={visible}
       currentPrefix={prefix}
       sortKey={sortKey}
@@ -760,4 +789,36 @@ function BrowserBody({
       onLoadMore={query.fetchNextPage}
     />
   );
+}
+
+function BodyRenderer(props: {
+  visible: S3Entry[];
+  currentPrefix: string;
+  sortKey: ObjectSortKey;
+  sortDir: SortDirection;
+  onSortChange: (key: ObjectSortKey) => void;
+  onSelectRow: (entry: S3Entry, mods: RowClickModifiers) => void;
+  onSelectAll: (entries: S3Entry[]) => void;
+  onOpen: (entry: S3Entry) => void;
+  onContextAction: (entry: S3Entry, action: ContextAction) => void;
+  hasNextPage: boolean;
+  isFetchingNextPage: boolean;
+  onLoadMore: () => void;
+}) {
+  const viewMode = usePrefsStore((s) => s.viewMode);
+  if (viewMode === "grid") {
+    return (
+      <ObjectGrid
+        visible={props.visible}
+        currentPrefix={props.currentPrefix}
+        onSelectRow={props.onSelectRow}
+        onOpen={props.onOpen}
+        onContextAction={props.onContextAction}
+        hasNextPage={props.hasNextPage}
+        isFetchingNextPage={props.isFetchingNextPage}
+        onLoadMore={props.onLoadMore}
+      />
+    );
+  }
+  return <ObjectList {...props} />;
 }

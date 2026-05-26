@@ -8,6 +8,7 @@ import { ObjectRow, type RowClickModifiers } from "@/components/object-row";
 import { ObjectContextMenu } from "@/components/object-context-menu";
 import { entryId } from "@/lib/object-path";
 import { useSelectionStore } from "@/stores/selection";
+import { usePrefsStore } from "@/stores/prefs";
 import type { ObjectSortKey, SortDirection } from "@/lib/object-sort";
 import type { S3Entry } from "@server/types";
 
@@ -21,8 +22,10 @@ export type ContextAction =
   | "copy-to"
   | "delete";
 
-/** Matches the actual row chrome (py-1.5 + ~24px content + border). */
-const ROW_HEIGHT = 36;
+/** Row heights — must match the rendered chrome in ObjectRow so the
+ *  virtualizer doesn't double-up or gap between rows. */
+const ROW_HEIGHT_COMFORTABLE = 36;
+const ROW_HEIGHT_COMPACT = 28;
 /**
  * Pre-render this many rows above/below the viewport. Higher = no blank rows
  * during fast scroll, at the cost of more mounted DOM. Rows are simple (icon
@@ -73,6 +76,9 @@ function ObjectListImpl({
   onLoadMore: () => void;
 }) {
   const parentRef = React.useRef<HTMLDivElement>(null);
+  const density = usePrefsStore((s) => s.density);
+  const rowHeight =
+    density === "compact" ? ROW_HEIGHT_COMPACT : ROW_HEIGHT_COMFORTABLE;
 
   // +1 slot for the loading/end sentinel when more pages are coming.
   const count = hasNextPage ? visible.length + 1 : visible.length;
@@ -80,7 +86,7 @@ function ObjectListImpl({
   const rowVirtualizer = useVirtualizer({
     count,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => ROW_HEIGHT,
+    estimateSize: () => rowHeight,
     overscan: OVERSCAN,
     // Stable per-item keys keep reconciliation correct when the infinite
     // query appends a new page mid-scroll — without this, React can reuse a
@@ -154,6 +160,7 @@ function ObjectListImpl({
                   <ObjectRow
                     entry={entry}
                     currentPrefix={currentPrefix}
+                    compact={density === "compact"}
                     onSelectRow={onSelectRow}
                     onOpen={onOpen}
                   />

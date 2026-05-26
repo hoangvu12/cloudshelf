@@ -13,6 +13,7 @@ import {
   setResume,
   type ResumePart,
 } from "@/lib/upload-resume";
+import { usePrefsStore } from "@/stores/prefs";
 
 /**
  * State machine for one upload. Multipart uploads stay in `uploading` across
@@ -110,7 +111,6 @@ interface UploadsState {
   order: string[];
   queue: string[];
   active: Set<string>;
-  maxConcurrent: number;
   actions: {
     addFiles: (
       target: { connectionId: string; bucket: string; prefix: string },
@@ -151,8 +151,6 @@ interface UploadsState {
     _runQueue: () => void;
   };
 }
-
-const MAX_CONCURRENT = 3;
 
 function joinKey(prefix: string, name: string): string {
   const norm = prefix && !prefix.endsWith("/") ? prefix + "/" : prefix;
@@ -207,7 +205,6 @@ export const useUploadsStore = create<UploadsState>((set, get) => ({
   order: [],
   queue: [],
   active: new Set(),
-  maxConcurrent: MAX_CONCURRENT,
   actions: {
     addFiles: ({ connectionId, bucket, prefix }, files) => {
       const now = Date.now();
@@ -222,12 +219,14 @@ export const useUploadsStore = create<UploadsState>((set, get) => ({
           const strategy: UploadStrategy =
             file.size >= MULTIPART_THRESHOLD ? "multipart" : "single";
 
-          // Resume check: only meaningful for multipart (single PUT can't resume).
+          // Resume check: only meaningful for multipart (single PUT can't
+          // resume) and only when the user hasn't disabled it in settings.
           let uploadId: string | undefined;
           let partSize: number | undefined;
           let parts: UploadPart[] | undefined;
           let bytesUploaded = 0;
-          if (strategy === "multipart") {
+          const resumeEnabled = usePrefsStore.getState().resumeOnReload;
+          if (strategy === "multipart" && resumeEnabled) {
             const fp = fingerprint({
               connectionId,
               bucket,
@@ -614,7 +613,8 @@ export const useUploadsStore = create<UploadsState>((set, get) => ({
 
     _runQueue: () => {
       const s = get();
-      const slots = s.maxConcurrent - s.active.size;
+      const maxConcurrent = usePrefsStore.getState().concurrentUploads;
+      const slots = maxConcurrent - s.active.size;
       if (slots <= 0 || s.queue.length === 0) return;
       const toStart = s.queue.slice(0, slots);
       set((s2) => {

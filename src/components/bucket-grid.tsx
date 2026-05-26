@@ -18,10 +18,16 @@ import type { Bucket } from "@server/types";
 type SortKey = "name" | "size" | "objects" | "created";
 
 /**
- * Flat list with an optional pinned section first. Section divider matches the
- * design: a single hairline between pinned and the rest — no extra labels.
+ * Grid view counterpart to BucketList. Pinned buckets render first, then a
+ * thin divider, then the rest. Tile sizing comes from CSS auto-fill so the
+ * grid reflows naturally on resize — no virtualization since a single account
+ * rarely has more buckets than fit on one screen.
+ *
+ * Card density tracks the same `density` pref as the list view: comfortable
+ * gives larger tiles with size + items + modified, compact drops to just name
+ * with a smaller icon.
  */
-export function BucketList({
+export function BucketGrid({
   buckets,
   pinnedNames,
   filter,
@@ -49,51 +55,51 @@ export function BucketList({
   const density = usePrefsStore((s) => s.density);
 
   return (
-    <>
-      <BucketListHeaders />
-      <div className="flex-1 space-y-0.5 overflow-y-auto p-2">
-        {pinned.map((b) => (
-          <BucketRow
-            key={b.name}
-            bucket={b}
-            pinned
-            density={density}
-            onTogglePin={onTogglePin}
-            onOpen={onOpenBucket}
-          />
-        ))}
-        {pinned.length > 0 && other.length > 0 && (
-          <div className="bg-ctp-surface0 mx-2 my-2 h-px" />
-        )}
-        {other.map((b) => (
-          <BucketRow
-            key={b.name}
-            bucket={b}
-            pinned={false}
-            density={density}
-            onTogglePin={onTogglePin}
-            onOpen={onOpenBucket}
-          />
-        ))}
-      </div>
-    </>
-  );
-}
-
-function BucketListHeaders() {
-  return (
-    <div className="border-ctp-surface0 text-ctp-subtext bg-ctp-mantle/30 flex shrink-0 border-b px-4 py-2 text-[11px] font-bold tracking-wider uppercase">
-      <div className="w-5 shrink-0" />
-      <div className="flex-1">Name</div>
-      <div className="w-24 text-right">Size</div>
-      <div className="w-24 text-right">Items</div>
-      <div className="w-32 text-right">Modified</div>
-      <div className="w-16" />
+    <div className="flex-1 overflow-y-auto p-4">
+      {pinned.length > 0 && (
+        <Section>
+          {pinned.map((b) => (
+            <BucketCard
+              key={b.name}
+              bucket={b}
+              pinned
+              density={density}
+              onTogglePin={onTogglePin}
+              onOpen={onOpenBucket}
+            />
+          ))}
+        </Section>
+      )}
+      {pinned.length > 0 && other.length > 0 && (
+        <div className="bg-ctp-surface0 my-4 h-px" />
+      )}
+      {other.length > 0 && (
+        <Section>
+          {other.map((b) => (
+            <BucketCard
+              key={b.name}
+              bucket={b}
+              pinned={false}
+              density={density}
+              onTogglePin={onTogglePin}
+              onOpen={onOpenBucket}
+            />
+          ))}
+        </Section>
+      )}
     </div>
   );
 }
 
-function BucketRow({
+function Section({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3">
+      {children}
+    </div>
+  );
+}
+
+function BucketCard({
   bucket,
   pinned,
   density,
@@ -107,86 +113,79 @@ function BucketRow({
   onOpen?: (name: string) => void;
 }) {
   const { Icon, accent, fill } = bucketAppearance(bucket.name, pinned);
+  const compact = density === "compact";
 
   return (
     <div
       onClick={() => onOpen?.(bucket.name)}
       className={cn(
-        "group hover:bg-ctp-surface0 flex cursor-pointer items-center rounded-md px-2 transition-colors",
-        density === "compact" ? "py-1" : "py-2"
+        "group bg-ctp-mantle/40 border-ctp-surface0 hover:border-ctp-mauve/60 hover:bg-ctp-surface0/30 relative flex cursor-pointer flex-col rounded-lg border transition-colors",
+        compact ? "gap-2 p-3" : "gap-3 p-4"
       )}
     >
-      <div className="text-ctp-yellow flex w-5 shrink-0 items-center justify-center">
-        {pinned && <Pin className="fill-ctp-yellow size-3" />}
+      <div className="flex items-start justify-between">
+        <Icon
+          className={cn(compact ? "size-7" : "size-10", accent, fill)}
+        />
+        <div className="flex items-center gap-1">
+          {pinned && (
+            <Pin className="fill-ctp-yellow text-ctp-yellow size-3" />
+          )}
+          <button
+            type="button"
+            aria-label="More actions"
+            onClick={(e) => e.stopPropagation()}
+            className="text-ctp-subtext hover:text-ctp-text opacity-0 transition-opacity group-hover:opacity-100 focus:outline-none"
+          >
+            <MoreHorizontal className="size-4" />
+          </button>
+        </div>
       </div>
 
-      <div className="flex flex-1 items-center gap-3">
-        <Icon className={cn("size-5", accent, fill)} />
-        <span
+      <div className="min-w-0">
+        <div
           className={cn(
             "text-ctp-text truncate text-sm",
             pinned && "font-medium"
           )}
+          title={bucket.name}
         >
           {bucket.name}
-        </span>
+        </div>
+        {!compact && (
+          <div className="text-ctp-subtext mt-1 truncate font-mono text-[10px]">
+            {formatFileTime(bucket.createdAt)}
+          </div>
+        )}
       </div>
 
-      <Cell>{formatBytes(bucket.sizeBytes)}</Cell>
-      <Cell>{formatCount(bucket.objectCount)}</Cell>
-      <Cell width="w-32">{formatFileTime(bucket.createdAt)}</Cell>
+      {!compact && (
+        <div className="border-ctp-surface0 text-ctp-subtext mt-auto flex items-center justify-between border-t pt-2 font-mono text-[10px]">
+          <span>{formatBytes(bucket.sizeBytes)}</span>
+          <span className="text-ctp-surface1">·</span>
+          <span>{formatCount(bucket.objectCount)} items</span>
+        </div>
+      )}
 
-      <div className="row-actions flex w-16 justify-end gap-2 opacity-0 transition-opacity group-hover:opacity-100">
-        <button
-          type="button"
-          aria-label={pinned ? "Unpin bucket" : "Pin bucket"}
-          aria-pressed={pinned}
-          onClick={(e) => {
-            e.stopPropagation();
-            onTogglePin?.(bucket.name);
-          }}
-          className={cn(
-            "transition-colors focus:outline-none",
-            pinned
-              ? "text-ctp-yellow"
-              : "text-ctp-subtext hover:text-ctp-yellow"
-          )}
-        >
-          <Pin className={cn("size-3.5", pinned && "fill-ctp-yellow")} />
-        </button>
-        <button
-          type="button"
-          aria-label="More actions"
-          onClick={(e) => e.stopPropagation()}
-          className="text-ctp-subtext hover:text-ctp-text focus:outline-none"
-        >
-          <MoreHorizontal className="size-4" />
-        </button>
-      </div>
+      <button
+        type="button"
+        aria-label={pinned ? "Unpin bucket" : "Pin bucket"}
+        aria-pressed={pinned}
+        onClick={(e) => {
+          e.stopPropagation();
+          onTogglePin?.(bucket.name);
+        }}
+        className={cn(
+          "absolute top-2 right-2 transition-colors focus:outline-none",
+          pinned ? "text-ctp-yellow" : "text-ctp-subtext hover:text-ctp-yellow opacity-0 group-hover:opacity-100"
+        )}
+      >
+        <Pin className={cn("size-3.5", pinned && "fill-ctp-yellow")} />
+      </button>
     </div>
   );
 }
 
-function Cell({
-  children,
-  width = "w-24",
-}: {
-  children: React.ReactNode;
-  width?: string;
-}) {
-  return (
-    <div className={cn("text-ctp-subtext text-right font-mono text-xs", width)}>
-      {children}
-    </div>
-  );
-}
-
-/**
- * Picks a folder icon + accent color based on bucket name. Special-cases a few
- * well-known patterns (backups, scratch/code, video, photos), then falls back
- * to a stable hash → palette for everything else so the same bucket always
- * gets the same color across sessions.
- */
 const APPEARANCE_FALLBACKS: { Icon: LucideIcon; accent: string; fill: string }[] = [
   { Icon: Folder, accent: "text-ctp-blue", fill: "fill-ctp-blue/20" },
   { Icon: Folder, accent: "text-ctp-mauve", fill: "fill-ctp-mauve/20" },
@@ -237,5 +236,3 @@ function compare(key: SortKey) {
     }
   };
 }
-
-export type { SortKey as BucketSortKey };

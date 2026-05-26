@@ -17,6 +17,7 @@ dist/
 
 # TanStack Router auto-generated
 src/routeTree.gen.ts
+.tanstack/
 
 # CloudShelf server runtime state
 data/
