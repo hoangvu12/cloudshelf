@@ -1,150 +1,186 @@
 # CloudShelf
 
 A self-hosted, single-user web app for managing S3-compatible storage —
-optimized for [telegram-s3](../telegram-s3) but works with any S3 endpoint
-(MinIO, R2, AWS, …).
+buckets, folders, uploads, downloads, previews, presigned links — for any
+S3 endpoint (MinIO, R2, AWS, [telegram-s3](https://github.com/hoangvu12/telegram-s3),
+…).
 
-See [PLAN.md](./PLAN.md) for the full architecture, decisions log, and
-feature roadmap. See [PROMPTS.md](./PROMPTS.md) for the UI-generation
-prompts used to design each screen.
+Live demo: <https://files.nguyenvu.dev>
 
-## How it's shaped
+> ⚠️ **Single-user, no auth.** Credentials sit in plaintext SQLite. Run it
+> on a LAN, on `localhost`, or behind your own auth proxy. Don't expose
+> the raw service to the public internet.
 
-Full-stack web app:
+## What it does
 
-- **Backend** — Bun + Hono server on `:3001`. Owns the SQLite DB
-  (`./data/cloudshelf.db`) where connection profiles live. Holds the AWS
-  SDK; the browser never touches S3 directly.
-- **Frontend** — Vite + React 19 SPA on `:5173` in dev. Talks only to
-  `/api/*` via a typed fetch wrapper + TanStack Query hooks.
-- **In prod** — `bun run build` outputs `dist/`. `bun run start` boots one
-  Bun process that serves `/api/*` *and* the static SPA on the same port.
+- **Multi-connection** — keep profiles for several S3 endpoints, switch
+  between them from the header.
+- **Browse buckets** like a file manager: virtual folders, breadcrumbs,
+  grid or list view, search, sort.
+- **Upload** — drag-and-drop, parallel uploads, real progress.
+  Multipart for big files. Bytes go browser → S3 directly via presigned
+  URLs (the server never proxies the payload), so progress is honest and
+  bandwidth isn't doubled.
+- **Previews** — images, video, audio, PDFs, and syntax-highlighted text
+  via Shiki without downloading the whole object.
+- **Presigned share links** with a configurable TTL.
+- **Light / dark / system theme**, rounded shadcn UI, keyboard-friendly.
 
-Credentials sit plaintext in SQLite — the app is designed for **local /
-LAN use only**. Don't expose to the public internet.
+## Stack
 
-## Stack at a glance
+- **Frontend** — Vite 6 + React 19 + TypeScript (strict), TanStack
+  Router (file-based) + TanStack Query 5, Tailwind v4, shadcn/ui,
+  Zustand, Shiki.
+- **Backend** — Bun + Hono on `:3001`. `bun:sqlite` for the connection
+  store. `@aws-sdk/client-s3` runs server-only and only mints presigns +
+  handles control-plane calls.
+- **One process in prod** — `bun run start` serves `/api/*` and the
+  built SPA on the same port.
 
-- Vite 6 + React 19 + TypeScript 5 (strict, project references)
-- TanStack Router (file-based) + TanStack Query 5
-- Tailwind v4 + shadcn/ui (`new-york` style, neutral baseColor)
-- Zustand for per-device UI state
-- Bun + Hono + `bun:sqlite` backend
-- `@aws-sdk/client-s3` runs on the server only
-- next-themes for light/dark/system
-
-## Prerequisites
-
-- Bun 1.3+
-- An S3-compatible endpoint (telegram-s3 defaults to `http://localhost:9000`)
-
-## Run
+## Quick start (local)
 
 ```bash
 bun install
-
-# Dev — two processes (concurrently runs them in one terminal):
-bun run dev                # → API :3001 + Vite :5173
-# or split:
-bun run dev:server         # Bun --watch server/index.ts  (:3001)
-bun run dev:ui             # Vite :5173, proxies /api → :3001
-
-# Other:
-bun run typecheck          # tsc -b (all projects)
-bun run build              # tsc -b && vite build → dist/
-bun run start              # NODE_ENV=production bun server/index.ts
-                           # → serves SPA from ./dist + /api on :3001
+bun run dev          # API :3001 + Vite :5173 (concurrently)
 ```
 
-### Environment overrides
+Open <http://localhost:5173>, click **Add connection**, point it at any
+S3-compatible endpoint. CloudShelf probes the credentials before
+saving.
+
+### Other scripts
+
+```bash
+bun run dev:server   # bun --watch server/index.ts        (:3001 only)
+bun run dev:ui       # vite                                (:5173, proxies /api)
+bun run typecheck    # tsc -b
+bun run build        # tsc -b && vite build → dist/
+bun run start        # NODE_ENV=production bun server/index.ts
+                     #   → serves SPA from ./dist + /api on $PORT
+```
+
+### Environment variables
 
 | Var | Default | What it does |
 |---|---|---|
-| `PORT` | `3001` | API server port |
-| `CLOUDSHELF_DB` | `./data/cloudshelf.db` | SQLite file location |
+| `PORT` | `3001` | Server port (API + SPA in prod) |
+| `CLOUDSHELF_DB` | `./data/cloudshelf.db` | SQLite file location — mount a volume here in prod |
 | `CLOUDSHELF_API` | `http://localhost:3001` | Vite dev proxy target |
+| `NODE_ENV` | — | Set to `production` to enable static SPA serving |
+
+## Deploy
+
+### Docker
+
+```bash
+docker build -t cloudshelf .
+docker run -d \
+  --name cloudshelf \
+  -p 3001:3001 \
+  -v cloudshelf-data:/app/data \
+  cloudshelf
+```
+
+Mount `/app/data` to a volume — that's where `cloudshelf.db` lives.
+
+### Easypanel
+
+1. Create an **App** service from this GitHub repo.
+2. Build type: **Dockerfile**.
+3. Add a **volume mount**: name `cloudshelf-data`, path `/app/data`.
+4. Add a **domain** pointing at internal port `3001` (HTTPS on).
+
+The included `Dockerfile` is the multi-stage build Easypanel will pick
+up automatically.
+
+### Behind a reverse proxy
+
+Front it with Caddy / nginx / Cloudflare / Traefik for TLS and (if you
+want it on the public internet) an auth layer like Cloudflare Access,
+basic auth, or Authelia.
+
+## Connecting to telegram-s3
+
+CloudShelf was built alongside [telegram-s3](https://github.com/hoangvu12/telegram-s3)
+but isn't coupled to it. To connect:
+
+| Field | Value |
+|---|---|
+| Endpoint | `http://localhost:9000` (or your telegram-s3 URL) |
+| Region | `us-east-1` (anything works — required by SDK) |
+| Access key | telegram-s3 access key |
+| Secret key | telegram-s3 secret key |
+| Force path-style | ✅ on |
+
+The same setup works for **MinIO**, **Cloudflare R2** (use `<account>.r2.cloudflarestorage.com`),
+**AWS S3** (leave endpoint blank), **Backblaze B2 S3**, **Wasabi**, etc.
 
 ## Project layout
 
 ```
-server/                  # Bun + Hono API
-├── index.ts             # entry; /api/* + serves /dist in prod
-├── db.ts                # bun:sqlite + schema + queries
-├── types.ts             # API types shared with frontend (via @server/*)
-├── lib/s3.ts            # createS3Client + probeConnection
+server/                     # Bun + Hono API
+├── index.ts                # entry; /api/* + serves /dist in prod
+├── db.ts                   # bun:sqlite + schema + queries
+├── types.ts                # shared with frontend via @server/*
+├── lib/s3.ts               # createS3Client + probeConnection
 └── routes/connections.ts
 
-src/                     # Vite SPA (browser-only; no AWS SDK imports)
+src/                        # Vite SPA — browser only, never imports AWS SDK
 ├── main.tsx
-├── styles.css           # Tailwind v4 + oklch theme tokens
-├── routes/              # TanStack Router file-based
+├── styles.css              # Tailwind v4 + oklch theme tokens
+├── routes/                 # TanStack Router (file-based)
 │   ├── __root.tsx
-│   ├── index.tsx        # bucket list (placeholder)
-│   └── setup.tsx        # add-connection form
+│   ├── index.tsx
+│   ├── setup.tsx
+│   ├── settings.tsx
+│   └── buckets.$bucketName.$.tsx
 ├── components/
-│   ├── ui/              # shadcn primitives (retheme: rounded-2xl, h-12 inputs)
-│   ├── pill-nav.tsx     # floating top nav + StatusDot + PillThemeToggle
-│   ├── form-section.tsx # FormCard / FormGroup / FormDivider / FormToggleRow
-│   ├── status-alert.tsx # success / error / info / warning
-│   ├── password-input.tsx
-│   ├── callout.tsx
-│   └── theme-{provider,toggle}.tsx
+│   ├── ui/                 # shadcn primitives (rounded-2xl retheme)
+│   ├── pill-nav.tsx
+│   ├── form-section.tsx
+│   └── …
 ├── lib/
-│   ├── utils.ts         # cn()
-│   ├── query.ts         # QueryClient
-│   └── api/
-│       ├── client.ts    # apiFetch + ApiClientError
-│       └── connections.ts # useConnections / useTestConnection / …
-└── stores/              # Zustand
+│   ├── api/                # apiFetch + React Query hooks
+│   ├── query.ts
+│   └── utils.ts
+└── stores/                 # Zustand
     ├── active-connection.ts
     ├── prefs.ts
     ├── selection.ts
     └── uploads.ts
 
-data/                    # runtime: cloudshelf.db (gitignored)
+data/                       # cloudshelf.db lives here (gitignored)
+Dockerfile                  # multi-stage build for prod
 ```
 
-## Adding a shadcn component
+## Adding things
 
+**Route** — drop a `.tsx` in `src/routes/` exporting a `Route` from
+`createFileRoute(...)`. `src/routeTree.gen.ts` regenerates on save.
+
+**API endpoint** — handler in `server/routes/<resource>.ts`, mount in
+`server/index.ts`, types in `server/types.ts`, React Query hooks in
+`src/lib/api/<resource>.ts`.
+
+**shadcn component** —
 ```bash
 bunx --bun shadcn@latest add <component> --yes
 ```
+Note: primitives in `src/components/ui/` are themed (rounded-2xl, h-12
+inputs, `subtle`/`pill` Button variants). Re-adding a primitive will
+overwrite the retheme — diff before committing. On Windows the CLI
+occasionally writes literal `@/...` paths; if an `@` folder appears at
+the repo root, move its contents into `src/` and delete it.
 
-> Heads-up: on Windows the CLI sometimes writes literal `@/...` paths
-> instead of resolving the alias. If you see an `@` folder appear at
-> the repo root after running `add`, move its contents into `src/` and
-> delete the `@` folder. (Known shadcn issue.)
->
-> Also — primitives in `src/components/ui/` are retheme'd (rounded-2xl,
-> h-12 inputs, neutral primary, `subtle`/`pill` variants on Button). If
-> you re-add a primitive it'll overwrite the retheme. Diff before
-> committing.
+## Security notes
 
-## Adding a route
+- **No auth.** Don't expose to the public internet without a layer in
+  front (Cloudflare Access, basic auth, Authelia, …).
+- Credentials are plaintext in `data/cloudshelf.db` — keep that file
+  out of backups/syncs you don't trust. `data/` is gitignored.
+- The browser never sees S3 credentials. Presigned URLs are minted with
+  short TTLs and scoped to a single operation.
 
-Drop a `.tsx` in `src/routes/` exporting a `Route` via `createFileRoute(...)`.
-The router plugin regenerates `src/routeTree.gen.ts` on save.
+## License
 
-## Adding an API endpoint
-
-1. Add the handler in `server/routes/<resource>.ts` (or create a new file).
-2. Mount it in `server/index.ts` with `app.route(...)`.
-3. Add request/response types to `server/types.ts`.
-4. Add React Query hooks in `src/lib/api/<resource>.ts`.
-
-## Working from PROMPTS.md
-
-1. Pick a screen from `PROMPTS.md`.
-2. Paste the prompt into the UI chatbot.
-3. Port the generated HTML into a React route in `src/routes/` — reuse
-   the shared components in `src/components/` (`FormCard`, `PillNav`,
-   `StatusAlert`, …) so every screen inherits the same look.
-4. Wire it to real API hooks in `src/lib/api/`; replace hardcoded sample
-   data and JS-toggled demo states.
-
-## Notes
-
-- No auth. Don't expose to the public internet.
-- No eslint config / tests yet (planned).
-- Credentials are stored plaintext in `data/cloudshelf.db` — keep that
-  file out of backups/syncs you don't trust. `data/` is gitignored.
+MIT
