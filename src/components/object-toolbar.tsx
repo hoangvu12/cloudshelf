@@ -2,6 +2,7 @@ import * as React from "react";
 import {
   CheckSquare,
   Download,
+  Eye,
   FolderOutput,
   FolderPlus,
   Link as LinkIcon,
@@ -31,6 +32,8 @@ export function ObjectToolbar({
   onUpload,
   onNewFolder,
   onClearSelection,
+  onPreview,
+  canPreview,
   onDownloadSelected,
   onCopyLink,
   onMove,
@@ -46,6 +49,9 @@ export function ObjectToolbar({
   onUpload: () => void;
   onNewFolder: () => void;
   onClearSelection: () => void;
+  onPreview: () => void;
+  /** True when exactly one file (not folder) is selected. */
+  canPreview: boolean;
   onDownloadSelected: () => void;
   onCopyLink: () => void;
   onMove: () => void;
@@ -97,6 +103,14 @@ export function ObjectToolbar({
       <div className="flex items-center gap-3">
         {isSelectionMode ? (
           <div className="flex items-center gap-1 font-mono text-xs">
+            <ActionButton
+              onClick={onPreview}
+              icon={<Eye className="text-ctp-mauve" />}
+              disabled={!canPreview}
+              title={canPreview ? undefined : "Select a single file"}
+            >
+              Preview
+            </ActionButton>
             <ActionButton onClick={onDownloadSelected} icon={<Download className="text-ctp-green" />}>
               Download
             </ActionButton>

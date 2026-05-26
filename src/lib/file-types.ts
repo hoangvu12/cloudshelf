@@ -110,3 +110,98 @@ export function fileAppearance(name: string): FileAppearance {
   const ext = name.slice(dot + 1).toLowerCase();
   return BY_EXT[ext] ?? FALLBACK;
 }
+
+/**
+ * What kind of inline preview should the panel render. Distinct from
+ * `fileAppearance` (which is about icon + label) — preview kind drives a
+ * different code path per body type, and the supported extension set is
+ * narrower than what we display icons for.
+ */
+export type PreviewKind =
+  | "image"
+  | "video"
+  | "audio"
+  | "text"
+  | "pdf"
+  | "unsupported";
+
+const PREVIEW_KIND_BY_EXT: Record<string, PreviewKind> = {
+  // Images the browser can render natively.
+  jpg: "image",
+  jpeg: "image",
+  png: "image",
+  gif: "image",
+  webp: "image",
+  svg: "image",
+  avif: "image",
+  // (HEIC intentionally omitted — most browsers can't decode it.)
+
+  // Video the <video> element handles broadly.
+  mp4: "video",
+  webm: "video",
+  mov: "video",
+  m4v: "video",
+  // (mkv / avi intentionally omitted — inconsistent browser support.)
+
+  // Audio.
+  mp3: "audio",
+  wav: "audio",
+  ogg: "audio",
+  m4a: "audio",
+  flac: "audio",
+
+  pdf: "pdf",
+
+  // Plain text + code we render in a <pre>. Anything plausibly UTF-8.
+  txt: "text",
+  md: "text",
+  log: "text",
+  csv: "text",
+  tsv: "text",
+  json: "text",
+  yaml: "text",
+  yml: "text",
+  toml: "text",
+  xml: "text",
+  ini: "text",
+  conf: "text",
+  env: "text",
+  js: "text",
+  mjs: "text",
+  cjs: "text",
+  ts: "text",
+  tsx: "text",
+  jsx: "text",
+  html: "text",
+  css: "text",
+  scss: "text",
+  py: "text",
+  rs: "text",
+  go: "text",
+  java: "text",
+  c: "text",
+  cpp: "text",
+  h: "text",
+  hpp: "text",
+  sh: "text",
+  bash: "text",
+  zsh: "text",
+  rb: "text",
+  php: "text",
+  sql: "text",
+  graphql: "text",
+  gql: "text",
+  dockerfile: "text",
+};
+
+export function previewKind(name: string): PreviewKind {
+  const lower = name.toLowerCase();
+  // Extensionless but well-known filenames.
+  if (lower === "dockerfile" || lower === "makefile" || lower === "readme") {
+    return "text";
+  }
+  const dot = lower.lastIndexOf(".");
+  if (dot === -1 || dot === lower.length - 1) return "unsupported";
+  const ext = lower.slice(dot + 1);
+  return PREVIEW_KIND_BY_EXT[ext] ?? "unsupported";
+}

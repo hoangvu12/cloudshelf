@@ -2,6 +2,7 @@ import * as React from "react";
 import {
   Copy,
   Download,
+  Eye,
   ExternalLink,
   FolderOutput,
   Link as LinkIcon,
@@ -78,6 +79,13 @@ function MenuItems({
       <ContextMenuLabel className="text-[10px] tracking-wider uppercase">
         {label}
       </ContextMenuLabel>
+      <ContextMenuItem
+        disabled={isFolder || selectedCount > 1}
+        onSelect={() => onAction(entry, "preview")}
+      >
+        <Eye className="text-ctp-mauve" />
+        Preview
+      </ContextMenuItem>
       <ContextMenuItem
         disabled={isFolder}
         onSelect={() => onAction(entry, "download")}

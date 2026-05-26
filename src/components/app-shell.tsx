@@ -2,17 +2,24 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 
 /**
- * Full-screen sidebar + main layout for the buckets browser. Dark Catppuccin
- * surface, edge-to-edge. The setup flow keeps its own centered card layout
- * and doesn't use this shell.
+ * Full-screen sidebar + main + (optional) preview layout for the buckets
+ * browser. Dark Catppuccin surface, edge-to-edge. The setup flow keeps its
+ * own centered card layout and doesn't use this shell.
+ *
+ * `previewPanel` only renders at `lg:` and up. Below that breakpoint the
+ * route mounts the preview inside a shadcn Drawer instead, so this slot is
+ * intentionally hidden — keeping the panel mounted at sm: would steal width
+ * from a list that's already cramped.
  */
 export function AppShell({
   sidebar,
   children,
+  previewPanel,
   className,
 }: {
   sidebar: React.ReactNode;
   children: React.ReactNode;
+  previewPanel?: React.ReactNode;
   className?: string;
 }) {
   return (
@@ -24,6 +31,11 @@ export function AppShell({
     >
       {sidebar}
       <div className="flex min-w-0 flex-1 flex-col">{children}</div>
+      {previewPanel ? (
+        <aside className="border-ctp-surface0 hidden w-[380px] shrink-0 border-l lg:flex lg:flex-col xl:w-[440px]">
+          {previewPanel}
+        </aside>
+      ) : null}
     </div>
   );
 }

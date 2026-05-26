@@ -121,7 +121,7 @@ Behind the panel, suggest a dimmed file browser silhouette so the panel has visu
 ```
 [paste output rules here]
 
-Build a file preview overlay that opens when a user clicks a file.
+Build a file preview sidebar that opens when a user clicks a file.
 
 What's on it:
 - The filename, type, and size.

@@ -7,9 +7,14 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { EmptyState } from "@/components/empty-state";
 import { ObjectBrowser } from "@/components/object-browser";
 import {
+  FilePreviewDrawer,
+  FilePreviewPanel,
+} from "@/components/file-preview-panel";
+import {
   CommandPalette,
   useCommandPaletteShortcut,
 } from "@/components/command-palette";
+import { usePreviewStore } from "@/stores/preview";
 import { useBuckets } from "@/lib/api/buckets";
 import { useConnections } from "@/lib/api/connections";
 import { useActiveConnectionStore } from "@/stores/active-connection";
@@ -55,6 +60,9 @@ function BucketPage() {
   const buckets = bucketsQuery.data ?? [];
 
   const [paletteOpen, setPaletteOpen] = useCommandPaletteShortcut();
+  // Mount the desktop panel only when something is being previewed — otherwise
+  // we'd permanently steal ~380px of width from the file list.
+  const previewOpen = usePreviewStore((s) => s.openKey !== null);
 
   if (connectionsQuery.isLoading) {
     return <ShellWithEmpty />;
@@ -115,8 +123,23 @@ function BucketPage() {
           }}
         />
       }
+      previewPanel={
+        previewOpen ? (
+          <FilePreviewPanel
+            connectionId={activeConnection.id}
+            bucket={bucket}
+            prefix={prefix}
+          />
+        ) : undefined
+      }
     >
       <ObjectBrowser
+        connectionId={activeConnection.id}
+        bucket={bucket}
+        prefix={prefix}
+      />
+
+      <FilePreviewDrawer
         connectionId={activeConnection.id}
         bucket={bucket}
         prefix={prefix}

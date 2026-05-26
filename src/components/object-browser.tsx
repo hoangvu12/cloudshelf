@@ -42,6 +42,7 @@ import {
   useObjects,
 } from "@/lib/api/objects";
 import { useSelectionStore } from "@/stores/selection";
+import { usePreviewStore } from "@/stores/preview";
 import { onUploadCompleted, useUploadsStore } from "@/stores/uploads";
 import type { S3Entry, S3ObjectEntry } from "@server/types";
 
@@ -86,10 +87,16 @@ export function ObjectBrowser({
   const anchorRef = React.useRef<string | null>(null);
   anchorRef.current = anchor;
 
+  const closePreview = usePreviewStore((s) => s.close);
+  const openPreview = usePreviewStore((s) => s.open);
+
   React.useEffect(() => {
     clearSelection();
     setAnchor(null);
-  }, [prefix, bucket, connectionId, clearSelection]);
+    // Stale preview from a different folder would point at a key the new
+    // listing doesn't contain — clearer to dismiss than to show a ghost panel.
+    closePreview();
+  }, [prefix, bucket, connectionId, clearSelection, closePreview]);
 
   const [sortKey, setSortKey] = React.useState<ObjectSortKey>("name");
   const [sortDir, setSortDir] = React.useState<SortDirection>("asc");
@@ -470,6 +477,16 @@ export function ObjectBrowser({
       };
 
       switch (action) {
+        case "preview": {
+          if (entry.type !== "object") return;
+          // Siblings = visible files (folders aren't previewable). Captured at
+          // open time so prev/next walks the user's current sort/filter view.
+          const siblings = visibleRef.current
+            .filter((e): e is S3ObjectEntry => e.type === "object")
+            .map((e) => e.key);
+          openPreview(entry.key, siblings);
+          return;
+        }
         case "download":
           if (sel.size > 1 && sel.has(id)) h.handleDownloadSelected();
           else h.downloadEntry(entry);
@@ -498,7 +515,7 @@ export function ObjectBrowser({
           return;
       }
     },
-    [handleOpen, setManySelected]
+    [handleOpen, setManySelected, openPreview]
   );
 
   // ─── Toolbar action delegates ───────────────────────────────────────────
@@ -511,6 +528,16 @@ export function ObjectBrowser({
     if (selectedEntries.length !== 1) return;
     handleCopyLink(selectedEntries[0]!);
   };
+  const handlePreviewFromToolbar = () => {
+    const only = selectedEntries.length === 1 ? selectedEntries[0]! : null;
+    if (!only || only.type !== "object") return;
+    const siblings = visible
+      .filter((e): e is S3ObjectEntry => e.type === "object")
+      .map((e) => e.key);
+    openPreview(only.key, siblings);
+  };
+  const canPreviewFromToolbar =
+    selectedEntries.length === 1 && selectedEntries[0]!.type === "object";
 
   // ─── Sort ───────────────────────────────────────────────────────────────
   const handleSortChange = React.useCallback((key: ObjectSortKey) => {
@@ -549,6 +576,8 @@ export function ObjectBrowser({
           clearSelection();
           setAnchor(null);
         }}
+        onPreview={handlePreviewFromToolbar}
+        canPreview={canPreviewFromToolbar}
         onDownloadSelected={handleDownloadSelected}
         onCopyLink={handleCopyLinkFromToolbar}
         onMove={() => setMoveOpen(true)}

@@ -12,6 +12,7 @@ import type { ObjectSortKey, SortDirection } from "@/lib/object-sort";
 import type { S3Entry } from "@server/types";
 
 export type ContextAction =
+  | "preview"
   | "download"
   | "open-new-tab"
   | "copy-link"

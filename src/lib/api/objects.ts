@@ -10,6 +10,7 @@
 import {
   useInfiniteQuery,
   useMutation,
+  useQuery,
   useQueryClient,
   type UseMutationOptions,
 } from "@tanstack/react-query";
@@ -148,5 +149,31 @@ export function fetchDownloadUrl(
   return apiFetch<PresignedUrl>(
     `${basePath(connectionId, bucket)}/objects/download-url?key=${encodeURIComponent(key)}`
   );
+}
+
+/**
+ * Cached presigned URL for the preview panel. Same endpoint as
+ * `fetchDownloadUrl`, but wrapped in a React Query so:
+ *   - prev/next through the panel doesn't re-fetch a URL the user just had
+ *   - <img>/<video> src stays referentially stable across re-renders
+ *
+ * staleTime is well under the server-side 15-min expiry so we never serve a
+ * stale URL that the user can't actually open.
+ */
+export function usePreviewUrl(
+  connectionId: string | null | undefined,
+  bucket: string | null | undefined,
+  key: string | null | undefined
+) {
+  const enabled = !!connectionId && !!bucket && !!key;
+  return useQuery<PresignedUrl, Error>({
+    queryKey: enabled
+      ? (["preview-url", connectionId, bucket, key] as const)
+      : ["preview-url", "none"],
+    queryFn: () => fetchDownloadUrl(connectionId!, bucket!, key!),
+    enabled,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
+  });
 }
 
