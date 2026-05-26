@@ -2,9 +2,7 @@ import * as React from "react";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import {
   ChevronsUpDown,
-  Clock,
   Home,
-  Link as LinkIcon,
   LogOut,
   Plus,
   Server,
@@ -24,7 +22,7 @@ import {
 import { useLogout, useMe } from "@/lib/api/auth";
 import type { S3Connection } from "@server/types";
 
-type AccentColor = "blue" | "pink" | "green" | "mauve" | "subtext";
+type AccentColor = "blue" | "mauve" | "subtext";
 
 interface PlaceItem {
   label: string;
@@ -37,25 +35,12 @@ interface PlaceItem {
 
 const ACCENT_TEXT: Record<AccentColor, string> = {
   blue: "text-ctp-blue",
-  pink: "text-ctp-pink",
-  green: "text-ctp-green",
   mauve: "text-ctp-mauve",
   subtext: "text-ctp-subtext",
 };
 
 const PLACES: PlaceItem[] = [
   { label: "All buckets", to: "/", icon: <Home className="size-4" />, accent: "blue" },
-  {
-    label: "Recent",
-    icon: <Clock className="size-4" />,
-    accent: "pink",
-    badge: (
-      <span className="bg-ctp-pink/20 text-ctp-pink rounded px-1.5 py-0.5 text-[10px] font-bold">
-        2
-      </span>
-    ),
-  },
-  { label: "Shared links", icon: <LinkIcon className="size-4" />, accent: "green" },
   { label: "Settings", to: "/settings", icon: <Settings className="size-4" />, accent: "subtext" },
 ];
 
