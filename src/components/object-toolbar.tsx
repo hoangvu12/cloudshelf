@@ -14,6 +14,7 @@ import {
 
 import { cn } from "@/lib/utils";
 import { formatBytes, formatCount } from "@/lib/format";
+import { Button } from "@/components/ui/button";
 
 /**
  * Two-mode toolbar that morphs based on selection state:
@@ -89,14 +90,14 @@ export function ObjectToolbar({
         </div>
       ) : (
         <div className="flex items-center gap-2">
-          <PrimaryButton onClick={onUpload}>
-            <UploadCloud className="size-4" />
+          <Button onClick={onUpload}>
+            <UploadCloud />
             Upload
-          </PrimaryButton>
-          <SecondaryButton onClick={onNewFolder}>
-            <FolderPlus className="text-ctp-blue size-4" />
+          </Button>
+          <Button variant="outline" onClick={onNewFolder}>
+            <FolderPlus className="text-ctp-blue" />
             New folder
-          </SecondaryButton>
+          </Button>
         </div>
       )}
 
@@ -172,42 +173,6 @@ function FilterInput({
         className="bg-ctp-crust border-ctp-surface0 text-ctp-text focus:border-ctp-mauve placeholder:text-ctp-surface1 w-48 rounded border py-1.5 pr-3 pl-8 font-mono text-xs transition-colors focus:outline-none"
       />
     </div>
-  );
-}
-
-function PrimaryButton({
-  onClick,
-  children,
-}: {
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="bg-primary text-primary-foreground flex items-center gap-2 rounded px-3 py-1.5 font-mono text-xs font-bold transition-opacity hover:opacity-90 focus:outline-none"
-    >
-      {children}
-    </button>
-  );
-}
-
-function SecondaryButton({
-  onClick,
-  children,
-}: {
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="bg-ctp-surface0 hover:bg-ctp-surface1 text-ctp-text border-ctp-surface1 flex items-center gap-2 rounded border px-3 py-1.5 font-mono text-xs transition-colors focus:outline-none"
-    >
-      {children}
-    </button>
   );
 }
 

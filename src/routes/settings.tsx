@@ -578,7 +578,7 @@ function AboutSection() {
         <h3 className="text-ctp-red mb-2 flex items-center gap-2 text-sm font-bold tracking-wider uppercase">
           <AlertTriangle className="size-4" /> Danger zone
         </h3>
-        <p className="text-ctp-subtext mb-4 text-sm">
+        <p className="text-ctp-subtext mb-4 font-sans text-sm">
           Clear all locally saved preferences, pinned buckets, and upload queue.
           This won't delete your connection profiles or any files on your S3
           endpoints.

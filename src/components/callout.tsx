@@ -26,7 +26,7 @@ export function Callout({
           {icon}
         </span>
       )}
-      <p className="leading-relaxed">{children}</p>
+      <p className="font-sans leading-relaxed">{children}</p>
     </div>
   );
 }
