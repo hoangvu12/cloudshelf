@@ -196,7 +196,7 @@ function LoaderRow({ loading }: { loading: boolean }) {
           Loading more...
         </>
       ) : (
-        <span className="text-ctp-surface1">scroll to load more</span>
+        <span className="text-ctp-subtext">scroll to load more</span>
       )}
     </div>
   );

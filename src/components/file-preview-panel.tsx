@@ -358,7 +358,7 @@ function MediaShell({
       <div
         className={cn(
           "flex flex-col items-center gap-2",
-          tone === "error" ? "text-ctp-red" : "text-ctp-overlay0"
+          tone === "error" ? "text-ctp-red" : "text-ctp-subtext"
         )}
       >
         {children}
@@ -550,7 +550,7 @@ function TextPreview({
               "[&_pre]:!bg-transparent [&_pre]:m-0 [&_pre]:py-2 [&_pre]:pr-3",
               "[&_code]:block [&_code]:[counter-reset:line]",
               "[&_.line]:relative [&_.line]:pl-12",
-              "[&_.line]:before:absolute [&_.line]:before:left-0 [&_.line]:before:w-9 [&_.line]:before:pr-2 [&_.line]:before:text-right [&_.line]:before:text-ctp-overlay0 [&_.line]:before:select-none",
+              "[&_.line]:before:absolute [&_.line]:before:left-0 [&_.line]:before:w-9 [&_.line]:before:pr-2 [&_.line]:before:text-right [&_.line]:before:text-ctp-subtext [&_.line]:before:select-none",
               "[&_.line]:before:[content:counter(line)] [&_.line]:before:[counter-increment:line]"
             )}
             // Shiki escapes input itself, safe to inject.
@@ -561,7 +561,7 @@ function TextPreview({
         )}
       </div>
       {highlighting && lang && (
-        <div className="border-ctp-surface0 text-ctp-overlay0 bg-ctp-mantle/60 flex items-center gap-1.5 border-t px-3 py-1.5 font-mono text-[10px]">
+        <div className="border-ctp-surface0 text-ctp-subtext bg-ctp-mantle/60 flex items-center gap-1.5 border-t px-3 py-1.5 font-mono text-[10px]">
           <Loader2 className="size-3 animate-spin" />
           Highlighting...
         </div>
@@ -593,7 +593,7 @@ function PlainText({ text }: { text: string }) {
     <pre className="text-ctp-text flex font-mono text-[11px] leading-5">
       <code
         aria-hidden
-        className="text-ctp-overlay0 border-ctp-surface0 bg-ctp-mantle/60 sticky left-0 shrink-0 border-r px-2 py-2 text-right select-none"
+        className="text-ctp-subtext border-ctp-surface0 bg-ctp-mantle/60 sticky left-0 shrink-0 border-r px-2 py-2 text-right select-none"
       >
         {lines.map((_, i) => (
           <div key={i}>{String(i + 1).padStart(gutterWidth, " ")}</div>

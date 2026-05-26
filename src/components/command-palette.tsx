@@ -69,7 +69,7 @@ export function CommandPalette({
               {buckets.length > 0 && (
                 <Command.Group
                   heading="Buckets"
-                  className="[&_[cmdk-group-heading]]:text-ctp-surface1 [&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:py-2 [&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-bold [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group-heading]]:uppercase"
+                  className="[&_[cmdk-group-heading]]:text-ctp-subtext [&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:py-2 [&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-bold [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group-heading]]:uppercase"
                 >
                   {buckets.map((b) => (
                     <PaletteItem
@@ -94,7 +94,7 @@ export function CommandPalette({
 
               <Command.Group
                 heading="Actions"
-                className="[&_[cmdk-group-heading]]:text-ctp-surface1 [&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:pt-4 [&_[cmdk-group-heading]]:pb-2 [&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-bold [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group-heading]]:uppercase"
+                className="[&_[cmdk-group-heading]]:text-ctp-subtext [&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:pt-4 [&_[cmdk-group-heading]]:pb-2 [&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-bold [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group-heading]]:uppercase"
               >
                 <PaletteItem
                   value="action create new bucket"
@@ -109,7 +109,7 @@ export function CommandPalette({
                     navigate({ to: "/setup" });
                     close();
                   }}
-                  icon={<Settings className="text-ctp-surface1 size-4" />}
+                  icon={<Settings className="text-ctp-subtext size-4" />}
                 >
                   Open configuration
                 </PaletteItem>

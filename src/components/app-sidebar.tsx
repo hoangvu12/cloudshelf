@@ -173,7 +173,7 @@ function SignedInFooter({
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="text-ctp-surface1 mb-2 px-2 text-[10px] font-bold tracking-widest uppercase">
+    <div className="text-ctp-subtext mb-2 px-2 text-[10px] font-bold tracking-widest uppercase">
       {children}
     </div>
   );
@@ -250,11 +250,11 @@ function ActiveConnectionSwitcher({
               </span>
             </span>
           </span>
-          <ChevronsUpDown className="text-ctp-surface1 group-hover:text-ctp-subtext size-3" />
+          <ChevronsUpDown className="text-ctp-subtext group-hover:text-ctp-text size-3" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-56">
-        <DropdownMenuLabel className="text-ctp-surface1 text-[10px] font-bold tracking-wider uppercase">
+        <DropdownMenuLabel className="text-ctp-subtext text-[10px] font-bold tracking-wider uppercase">
           Connections
         </DropdownMenuLabel>
         {connections.length === 0 && (

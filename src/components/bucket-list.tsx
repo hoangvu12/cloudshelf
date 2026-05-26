@@ -78,8 +78,8 @@ export function BucketList({
 
 function BucketListHeaders() {
   return (
-    <div className="border-ctp-surface0 text-ctp-subtext bg-ctp-mantle/30 flex shrink-0 border-b px-4 py-2 text-[11px] font-bold tracking-wider uppercase">
-      <div className="w-5 shrink-0" />
+    <div className="border-ctp-surface0 text-ctp-text bg-ctp-mantle/30 flex shrink-0 border-b px-4 py-2 text-[11px] font-bold tracking-wider uppercase">
+      <div className="w-8 shrink-0" />
       <div className="flex-1">Name</div>
       <div className="w-24 text-right">Size</div>
       <div className="w-24 text-right">Items</div>
@@ -112,7 +112,7 @@ function BucketRow({
         density === "compact" ? "py-1" : "py-2"
       )}
     >
-      <div className="text-ctp-yellow flex w-5 shrink-0 items-center justify-center">
+      <div className="text-ctp-yellow flex w-8 shrink-0 items-center justify-center">
         {pinned && <Pin className="fill-ctp-yellow size-3" />}
       </div>
 

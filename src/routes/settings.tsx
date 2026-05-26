@@ -513,7 +513,7 @@ function AboutSection() {
         </div>
 
         <div className="bg-ctp-crust border-ctp-surface0 flex min-w-[200px] flex-col gap-3 rounded border p-4">
-          <div className="text-ctp-surface1 font-mono text-[10px] font-bold tracking-widest uppercase">
+          <div className="text-ctp-subtext font-mono text-[10px] font-bold tracking-widest uppercase">
             Backend
           </div>
           <BackendStat label="Status" value={

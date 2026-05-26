@@ -79,7 +79,7 @@ export function BreadcrumbPath({
 
         {bucket && (
           <>
-            <span className="text-ctp-surface1 mx-2 shrink-0">/</span>
+            <span className="text-ctp-subtext mx-2 shrink-0">/</span>
             {atBucketRoot ? (
               <span className="text-ctp-mauve truncate font-bold">{bucket}</span>
             ) : (
@@ -99,7 +99,7 @@ export function BreadcrumbPath({
           const target = prefixAtDepth(segments, idx);
           return (
             <React.Fragment key={target}>
-              <span className="text-ctp-surface1 mx-2 shrink-0">/</span>
+              <span className="text-ctp-subtext mx-2 shrink-0">/</span>
               {isLast ? (
                 <span className="text-ctp-mauve truncate font-bold">
                   {segment}

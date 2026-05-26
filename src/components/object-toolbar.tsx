@@ -153,7 +153,7 @@ export function ObjectToolbar({
         {!isSelectionMode && (
           <div className="text-ctp-subtext flex gap-3 font-mono text-[11px]">
             <span>{formatCount(totalCount)} items</span>
-            <span className="text-ctp-surface1">|</span>
+            <span className="text-ctp-subtext">|</span>
             <span>{formatBytes(totalBytes)} total</span>
           </div>
         )}

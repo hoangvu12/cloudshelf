@@ -185,7 +185,7 @@ function LoaderRow({ loading }: { loading: boolean }) {
           Loading more...
         </>
       ) : (
-        <span className="text-ctp-surface1">scroll to load more</span>
+        <span className="text-ctp-subtext">scroll to load more</span>
       )}
     </div>
   );
@@ -221,7 +221,7 @@ function Header({
   });
 
   return (
-    <div className="border-ctp-surface0 text-ctp-subtext bg-ctp-crust/50 flex shrink-0 border-b px-4 py-2 font-mono text-[10px] uppercase">
+    <div className="border-ctp-surface0 text-ctp-text bg-ctp-crust/50 flex shrink-0 border-b px-4 py-2 font-mono text-[10px] uppercase">
       <div className="flex w-8 shrink-0 items-center justify-center">
         <Checkbox
           checked={

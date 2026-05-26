@@ -158,7 +158,7 @@ function BucketCard({
       {!compact && (
         <div className="border-ctp-surface0 text-ctp-subtext mt-auto flex items-center justify-between border-t pt-2 font-mono text-[10px]">
           <span>{formatBytes(bucket.sizeBytes)}</span>
-          <span className="text-ctp-surface1">·</span>
+          <span className="text-ctp-subtext">·</span>
           <span>{formatCount(bucket.objectCount)} items</span>
         </div>
       )}

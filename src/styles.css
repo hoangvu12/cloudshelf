@@ -16,7 +16,10 @@
   --color-ctp-surface0: #313244;
   --color-ctp-surface1: #45475a;
   --color-ctp-text: #cdd6f4;
-  --color-ctp-subtext: #a6adc8;
+  /* Brighter than Catppuccin's subtext1 (#bac2de) so column headers, small
+     status hints, and section labels actually feel readable. Stays distinct
+     from --color-ctp-text but reads as light, not gray. */
+  --color-ctp-subtext: #c8d0e8;
   --color-ctp-mauve: #cba6f7;
   --color-ctp-pink: #f5c2e7;
   --color-ctp-red: #f38ba8;
