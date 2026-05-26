@@ -1,5 +1,6 @@
 import * as React from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useTheme } from "next-themes";
 import {
   AlertTriangle,
   BookOpen,
@@ -22,6 +23,7 @@ import {
 import { AppShell, AppStatusBar } from "@/components/app-shell";
 import { AppSidebar } from "@/components/app-sidebar";
 import { Slider } from "@/components/ui/slider";
+import { THEMES, type ThemeName } from "@/components/theme-provider";
 import {
   useConnections,
   useDeleteConnection,
@@ -74,12 +76,12 @@ function SettingsPage() {
         />
       }
     >
-      <div className="border-ctp-surface0 flex h-14 shrink-0 items-center justify-between gap-4 border-b px-5">
+      <div className="border-border flex h-14 shrink-0 items-center justify-between gap-4 border-b px-5">
         <div className="flex min-w-0 items-baseline gap-2">
-          <h1 className="text-ctp-text truncate text-base font-medium">
+          <h1 className="text-foreground truncate text-base font-medium">
             Settings
           </h1>
-          <span className="text-ctp-subtext truncate font-mono text-xs">
+          <span className="text-muted-foreground truncate font-mono text-xs">
             ~/.config/cloudshelf/settings.conf
           </span>
         </div>
@@ -126,13 +128,13 @@ function SettingsNav({
   onChange: (next: Section) => void;
 }) {
   return (
-    <nav className="bg-ctp-mantle/60 border-ctp-surface0 flex w-48 shrink-0 flex-col gap-0.5 border-r py-3">
+    <nav className="bg-card/60 border-border flex w-48 shrink-0 flex-col gap-0.5 border-r py-3">
       {NAV_ITEMS.map((item, i) => {
         const isAbout = item.id === "about";
         return (
           <React.Fragment key={item.id}>
             {isAbout && i > 0 && (
-              <div className="border-ctp-surface0 mx-4 my-2 border-t" />
+              <div className="border-border mx-4 my-2 border-t" />
             )}
             <button
               type="button"
@@ -141,8 +143,8 @@ function SettingsNav({
               className={cn(
                 "flex items-center gap-3 border-l-2 px-4 py-2.5 text-left text-sm font-medium transition-colors",
                 active === item.id
-                  ? "border-ctp-mauve bg-ctp-surface0 text-ctp-mauve"
-                  : "text-ctp-subtext hover:bg-ctp-surface0 border-transparent hover:text-ctp-text"
+                  ? "border-accent-mauve bg-muted text-accent-mauve"
+                  : "text-muted-foreground hover:bg-muted border-transparent hover:text-foreground"
               )}
             >
               {item.icon}
@@ -211,14 +213,8 @@ function AppearanceSection() {
 
       <SettingRow
         label="Color theme"
-        description="CloudShelf is dark-only — Catppuccin Mocha is part of the visual identity."
-        control={
-          <Segmented<"dark">
-            value="dark"
-            onChange={() => {}}
-            options={[{ value: "dark", label: "Dark" }]}
-          />
-        }
+        description="Switches the entire palette. All themes are dark-aesthetic."
+        control={<ThemePicker />}
       />
     </SectionShell>
   );
@@ -272,7 +268,7 @@ function UploadsSection() {
         onChange={(v) => patch({ concurrentParts: v })}
       />
 
-      <div className="border-ctp-surface0 space-y-6 border-t pt-6">
+      <div className="border-border space-y-6 border-t pt-6">
         <SettingToggleRow
           label="Overwrite warning"
           description="Prompt before overwriting existing files."
@@ -320,21 +316,21 @@ function ProfilesSection({
 
   return (
     <div className="space-y-4">
-      <div className="border-ctp-surface0 mb-6 flex items-center justify-between border-b pb-2">
-        <h2 className="text-ctp-peach font-mono text-[10px] font-bold tracking-widest uppercase">
+      <div className="border-border mb-6 flex items-center justify-between border-b pb-2">
+        <h2 className="text-accent-peach font-mono text-[10px] font-bold tracking-widest uppercase">
           S3 endpoints
         </h2>
         <button
           type="button"
           onClick={() => navigate({ to: "/setup" })}
-          className="bg-ctp-crust border-ctp-surface1 hover:border-ctp-mauve hover:text-ctp-mauve text-ctp-text flex items-center gap-2 rounded border px-3 py-1.5 font-mono text-xs transition-colors"
+          className="bg-input-bg border-surface-1 hover:border-accent-mauve hover:text-accent-mauve text-foreground flex items-center gap-2 rounded border px-3 py-1.5 font-mono text-xs transition-colors"
         >
           <Plus className="size-3.5" /> Add profile
         </button>
       </div>
 
       {connections.length === 0 && (
-        <div className="border-ctp-surface0 text-ctp-subtext rounded-lg border border-dashed p-10 text-center text-sm">
+        <div className="border-border text-muted-foreground rounded-lg border border-dashed p-10 text-center text-sm">
           No profiles yet. Add one to start managing buckets.
         </div>
       )}
@@ -347,14 +343,14 @@ function ProfilesSection({
             className={cn(
               "group flex items-center justify-between rounded-lg border p-4",
               isActive
-                ? "border-ctp-mauve/50 bg-ctp-surface0/30"
-                : "border-ctp-surface0 bg-ctp-crust/50 hover:border-ctp-surface1"
+                ? "border-accent-mauve/50 bg-muted/30"
+                : "border-border bg-input-bg/50 hover:border-surface-1"
             )}
           >
             <div className="flex min-w-0 items-center gap-4">
               <ProfileIcon endpoint={c.endpoint} active={isActive} />
               <div className="min-w-0">
-                <div className="text-ctp-text flex items-center gap-2 truncate text-sm font-semibold">
+                <div className="text-foreground flex items-center gap-2 truncate text-sm font-semibold">
                   {c.name}
                   {isActive ? (
                     <ProfileBadge tone="green">Active</ProfileBadge>
@@ -362,7 +358,7 @@ function ProfilesSection({
                     <ProfileBadge tone="muted">Saved</ProfileBadge>
                   )}
                 </div>
-                <div className="text-ctp-subtext mt-1 truncate font-mono text-xs">
+                <div className="text-muted-foreground mt-1 truncate font-mono text-xs">
                   {c.endpoint}
                 </div>
               </div>
@@ -372,7 +368,7 @@ function ProfilesSection({
                 <button
                   type="button"
                   onClick={() => setActive(c.id)}
-                  className="text-ctp-subtext hover:bg-ctp-surface1 hover:text-ctp-text rounded px-2 py-1 font-mono text-[11px] transition-colors"
+                  className="text-muted-foreground hover:bg-surface-1 hover:text-foreground rounded px-2 py-1 font-mono text-[11px] transition-colors"
                   title="Set as active"
                 >
                   Activate
@@ -381,7 +377,7 @@ function ProfilesSection({
               <button
                 type="button"
                 onClick={() => navigate({ to: "/setup" })}
-                className="text-ctp-subtext hover:bg-ctp-surface1 hover:text-ctp-text rounded p-2 transition-colors"
+                className="text-muted-foreground hover:bg-surface-1 hover:text-foreground rounded p-2 transition-colors"
                 title="Edit"
               >
                 <Edit2 className="size-4" />
@@ -390,7 +386,7 @@ function ProfilesSection({
                 type="button"
                 onClick={() => onDelete(c)}
                 disabled={deleteConnection.isPending}
-                className="text-ctp-subtext hover:text-ctp-red hover:bg-ctp-red/10 rounded p-2 transition-colors disabled:opacity-50"
+                className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded p-2 transition-colors disabled:opacity-50"
                 title="Delete"
               >
                 <Trash2 className="size-4" />
@@ -420,7 +416,7 @@ function ProfileIcon({
     <Icon
       className={cn(
         "size-6 shrink-0",
-        active ? "text-ctp-mauve" : "text-ctp-subtext"
+        active ? "text-accent-mauve" : "text-muted-foreground"
       )}
     />
   );
@@ -438,8 +434,8 @@ function ProfileBadge({
       className={cn(
         "rounded border px-1.5 py-0.5 font-mono text-[9px] uppercase",
         tone === "green"
-          ? "border-ctp-green/30 bg-ctp-green/20 text-ctp-green"
-          : "border-ctp-surface1 bg-ctp-surface0 text-ctp-subtext"
+          ? "border-accent-green/30 bg-accent-green/20 text-accent-green"
+          : "border-surface-1 bg-muted text-muted-foreground"
       )}
     >
       {children}
@@ -452,19 +448,19 @@ function ProfileBadge({
 function KeyboardSection() {
   return (
     <SectionShell title="Keyboard shortcuts" accent="green">
-      <div className="border-ctp-surface0 bg-ctp-mantle/50 overflow-hidden rounded-lg border">
-        <div className="bg-ctp-surface0/30 border-ctp-surface0 text-ctp-subtext grid grid-cols-2 border-b p-3 font-mono text-xs font-bold tracking-wider uppercase">
+      <div className="border-border bg-card/50 overflow-hidden rounded-lg border">
+        <div className="bg-muted/30 border-border text-muted-foreground grid grid-cols-2 border-b p-3 font-mono text-xs font-bold tracking-wider uppercase">
           <div>Shortcut</div>
           <div>Action</div>
         </div>
-        <div className="divide-ctp-surface0/50 divide-y text-sm">
+        <div className="divide-border/50 divide-y text-sm">
           {SHORTCUTS.map((s, i) => (
             <div
               key={i}
-              className="hover:bg-ctp-surface0/20 grid grid-cols-2 items-center p-3"
+              className="hover:bg-muted/20 grid grid-cols-2 items-center p-3"
             >
               <div className="flex items-center gap-1">{s.keys}</div>
-              <div className="text-ctp-subtext">{s.action}</div>
+              <div className="text-muted-foreground">{s.action}</div>
             </div>
           ))}
         </div>
@@ -490,13 +486,13 @@ function AboutSection() {
 
   return (
     <SectionShell title="System information" accent="mauve">
-      <div className="bg-ctp-mantle/80 border-ctp-surface0 flex flex-col gap-6 rounded-lg border p-5 sm:flex-row sm:justify-between">
+      <div className="bg-card/80 border-border flex flex-col gap-6 rounded-lg border p-5 sm:flex-row sm:justify-between">
         <div>
-          <h3 className="text-ctp-text flex items-center gap-2 text-xl font-bold">
-            <Cloud className="text-ctp-mauve size-6" />
+          <h3 className="text-foreground flex items-center gap-2 text-xl font-bold">
+            <Cloud className="text-accent-mauve size-6" />
             CloudShelf
           </h3>
-          <p className="text-ctp-subtext mt-1 font-mono text-xs">
+          <p className="text-muted-foreground mt-1 font-mono text-xs">
             v0.1.0-beta
           </p>
           <div className="mt-6 flex flex-wrap gap-4 font-mono text-xs">
@@ -512,24 +508,24 @@ function AboutSection() {
           </div>
         </div>
 
-        <div className="bg-ctp-crust border-ctp-surface0 flex min-w-[200px] flex-col gap-3 rounded border p-4">
-          <div className="text-ctp-subtext font-mono text-[10px] font-bold tracking-widest uppercase">
+        <div className="bg-input-bg border-border flex min-w-[200px] flex-col gap-3 rounded border p-4">
+          <div className="text-muted-foreground font-mono text-[10px] font-bold tracking-widest uppercase">
             Backend
           </div>
           <BackendStat label="Status" value={
-            <span className="text-ctp-green flex items-center gap-1.5 font-mono">
-              <span className="bg-ctp-green size-1.5 rounded-full" /> OK
+            <span className="text-success flex items-center gap-1.5 font-mono">
+              <span className="bg-success size-1.5 rounded-full" /> OK
             </span>
           } />
-          <BackendStat label="API" value={<span className="text-ctp-text font-mono">/api</span>} />
+          <BackendStat label="API" value={<span className="text-foreground font-mono">/api</span>} />
         </div>
       </div>
 
-      <div className="border-ctp-red/30 bg-ctp-red/5 rounded-lg border p-5">
-        <h3 className="text-ctp-red mb-2 flex items-center gap-2 text-sm font-bold tracking-wider uppercase">
+      <div className="border-destructive/30 bg-destructive/5 rounded-lg border p-5">
+        <h3 className="text-destructive mb-2 flex items-center gap-2 text-sm font-bold tracking-wider uppercase">
           <AlertTriangle className="size-4" /> Danger zone
         </h3>
-        <p className="text-ctp-subtext mb-4 font-sans text-sm">
+        <p className="text-muted-foreground mb-4 font-sans text-sm">
           Clear all locally saved preferences, pinned buckets, and upload queue.
           This won't delete your connection profiles or any files on your S3
           endpoints.
@@ -537,7 +533,7 @@ function AboutSection() {
         <button
           type="button"
           onClick={resetLocalData}
-          className="bg-ctp-red/20 hover:bg-ctp-red text-ctp-red hover:text-ctp-crust border-ctp-red/50 rounded border px-4 py-2 text-sm font-bold transition-colors"
+          className="bg-destructive/20 hover:bg-destructive text-destructive hover:text-destructive-foreground border-destructive/50 rounded border px-4 py-2 text-sm font-bold transition-colors"
         >
           Reset local preferences
         </button>
@@ -555,7 +551,7 @@ function BackendStat({
 }) {
   return (
     <div className="flex items-center justify-between text-xs">
-      <span className="text-ctp-subtext">{label}</span>
+      <span className="text-muted-foreground">{label}</span>
       {value}
     </div>
   );
@@ -573,7 +569,7 @@ function ExternalLink({
   return (
     <a
       href={href}
-      className="text-ctp-blue hover:underline flex items-center gap-1"
+      className="text-accent-blue hover:underline flex items-center gap-1"
     >
       {icon}
       {children}
@@ -593,16 +589,16 @@ function SectionShell({
   children: React.ReactNode;
 }) {
   const accentClass = {
-    mauve: "text-ctp-mauve",
-    blue: "text-ctp-blue",
-    peach: "text-ctp-peach",
-    green: "text-ctp-green",
+    mauve: "text-accent-mauve",
+    blue: "text-accent-blue",
+    peach: "text-accent-peach",
+    green: "text-accent-green",
   }[accent];
   return (
     <div className="space-y-6">
       <h2
         className={cn(
-          "border-ctp-surface0 border-b pb-2 font-mono text-[10px] font-bold tracking-widest uppercase",
+          "border-border border-b pb-2 font-mono text-[10px] font-bold tracking-widest uppercase",
           accentClass
         )}
       >
@@ -623,12 +619,12 @@ function SettingRow({
   control: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4">
-      <div>
-        <div className="text-ctp-text text-sm font-medium">{label}</div>
-        <div className="text-ctp-subtext mt-1 text-xs">{description}</div>
+    <div className="flex items-start justify-between gap-4">
+      <div className="w-48 shrink-0">
+        <div className="text-foreground text-sm font-medium">{label}</div>
+        <div className="text-muted-foreground mt-1 text-xs">{description}</div>
       </div>
-      <div className="shrink-0">{control}</div>
+      <div className="min-w-0">{control}</div>
     </div>
   );
 }
@@ -657,16 +653,16 @@ function SettingToggleRow({
           className={cn(
             "relative h-[18px] w-8 shrink-0 rounded-full border transition-colors",
             checked
-              ? "border-ctp-mauve bg-ctp-mauve"
-              : "border-ctp-surface1 bg-ctp-surface0"
+              ? "border-accent-mauve bg-accent-mauve"
+              : "border-surface-1 bg-muted"
           )}
         >
           <span
             className={cn(
               "absolute top-[1px] left-[1px] size-[14px] rounded-full transition-transform",
               checked
-                ? "bg-ctp-crust translate-x-[14px]"
-                : "bg-ctp-subtext translate-x-0"
+                ? "bg-input-bg translate-x-[14px]"
+                : "bg-muted-foreground translate-x-0"
             )}
           />
         </button>
@@ -694,10 +690,10 @@ function SliderRow({
     <div>
       <div className="mb-3 flex items-center justify-between gap-4">
         <div>
-          <div className="text-ctp-text text-sm font-medium">{label}</div>
-          <div className="text-ctp-subtext mt-1 text-xs">{description}</div>
+          <div className="text-foreground text-sm font-medium">{label}</div>
+          <div className="text-muted-foreground mt-1 text-xs">{description}</div>
         </div>
-        <div className="text-ctp-blue bg-ctp-surface0 border-ctp-surface1 min-w-[32px] rounded border px-2 py-1 text-center font-mono text-xs">
+        <div className="text-accent-blue bg-muted border-surface-1 min-w-[32px] rounded border px-2 py-1 text-center font-mono text-xs">
           {value}
         </div>
       </div>
@@ -722,7 +718,7 @@ function Segmented<T extends string | number>({
   options: { value: T; label: React.ReactNode }[];
 }) {
   return (
-    <div className="bg-ctp-crust border-ctp-surface0 inline-flex rounded-md border p-0.5">
+    <div className="bg-input-bg border-border inline-flex rounded-md border p-0.5">
       {options.map((opt) => {
         const active = opt.value === value;
         return (
@@ -733,11 +729,123 @@ function Segmented<T extends string | number>({
             className={cn(
               "flex items-center gap-1.5 rounded px-3 py-1 font-mono text-xs transition-colors",
               active
-                ? "bg-ctp-surface1 text-ctp-text shadow-sm"
-                : "text-ctp-subtext hover:text-ctp-text"
+                ? "bg-surface-1 text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
             )}
           >
             {opt.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Theme picker ───────────────────────────────────────────────────────
+// Swatches are hardcoded per theme so each preview shows that theme's actual
+// palette regardless of which one is currently active. Keep in sync with the
+// primitive blocks in styles.css.
+const THEME_OPTIONS: Record<
+  ThemeName,
+  { label: string; subtitle: string; bg: string; swatches: string[] }
+> = {
+  mocha: {
+    label: "Catppuccin Mocha",
+    subtitle: "Warm purples on aubergine",
+    bg: "#1e1e2e",
+    swatches: ["#cba6f7", "#f38ba8", "#a6e3a1", "#f9e2af", "#89b4fa"],
+  },
+  macchiato: {
+    label: "Catppuccin Macchiato",
+    subtitle: "Softer pastel midnight",
+    bg: "#24273a",
+    swatches: ["#c6a0f6", "#ed8796", "#a6da95", "#eed49f", "#8aadf4"],
+  },
+  "tokyo-night": {
+    label: "Tokyo Night",
+    subtitle: "Cool blues on midnight",
+    bg: "#1a1b26",
+    swatches: ["#bb9af7", "#f7768e", "#9ece6a", "#e0af68", "#7aa2f7"],
+  },
+  nord: {
+    label: "Nord",
+    subtitle: "Arctic frost and aurora",
+    bg: "#2e3440",
+    swatches: ["#b48ead", "#bf616a", "#a3be8c", "#ebcb8b", "#88c0d0"],
+  },
+  "rose-pine": {
+    label: "Rosé Pine",
+    subtitle: "Soho-vibe, but make it pastel",
+    bg: "#191724",
+    swatches: ["#c4a7e7", "#eb6f92", "#31748f", "#f6c177", "#9ccfd8"],
+  },
+  "rose-pine-moon": {
+    label: "Rosé Pine Moon",
+    subtitle: "Lighter sibling of Rosé Pine",
+    bg: "#232136",
+    swatches: ["#c4a7e7", "#eb6f92", "#3e8fb0", "#f6c177", "#9ccfd8"],
+  },
+  lilypichu: {
+    label: "LilyPichu",
+    subtitle: "Rose-tinted everything",
+    bg: "#482a36",
+    swatches: ["#d670ad", "#c95876", "#40bf95", "#cdb84b", "#4ba4cd"],
+  },
+  vencord: {
+    label: "Vencord",
+    subtitle: "Earthy Gruvbox warmth",
+    bg: "#282828",
+    swatches: ["#d3869b", "#ea6962", "#a8b665", "#d8a656", "#7caea3"],
+  },
+};
+
+function ThemePicker() {
+  const { theme, setTheme } = useTheme();
+  // Avoid hydration flicker — useTheme is undefined until the client mounts.
+  const [mounted, setMounted] = React.useState(false);
+  React.useEffect(() => setMounted(true), []);
+  const active = mounted ? (theme as ThemeName | undefined) ?? "mocha" : null;
+
+  return (
+    <div className="grid w-full max-w-2xl grid-cols-2 gap-3 sm:grid-cols-3">
+      {THEMES.map((name) => {
+        const opt = THEME_OPTIONS[name];
+        const isActive = active === name;
+        return (
+          <button
+            key={name}
+            type="button"
+            onClick={() => setTheme(name)}
+            aria-pressed={isActive}
+            className={cn(
+              "group flex flex-col gap-2 rounded-lg border p-3 text-left transition-colors",
+              isActive
+                ? "border-primary ring-primary/30 ring-2"
+                : "border-border hover:border-surface-1"
+            )}
+          >
+            <div
+              className="border-border h-12 w-full overflow-hidden rounded-md border"
+              style={{ backgroundColor: opt.bg }}
+            >
+              <div className="flex h-full items-center justify-center gap-1.5">
+                {opt.swatches.map((c) => (
+                  <span
+                    key={c}
+                    className="size-3 rounded-full"
+                    style={{ backgroundColor: c }}
+                  />
+                ))}
+              </div>
+            </div>
+            <div className="min-w-0">
+              <div className="text-foreground truncate text-sm font-medium">
+                {opt.label}
+              </div>
+              <div className="text-muted-foreground truncate font-mono text-[10px]">
+                {opt.subtitle}
+              </div>
+            </div>
           </button>
         );
       })}

@@ -131,10 +131,10 @@ export function FilePreviewPanel({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <header className="border-ctp-surface0 flex h-12 shrink-0 items-center gap-2 border-b px-3">
+      <header className="border-border flex h-12 shrink-0 items-center gap-2 border-b px-3">
         <Icon className={cn("size-4 shrink-0", color)} />
         <div className="min-w-0 flex-1">
-          <div className="text-ctp-text truncate text-sm font-medium" title={name}>
+          <div className="text-foreground truncate text-sm font-medium" title={name}>
             {name}
           </div>
         </div>
@@ -149,7 +149,7 @@ export function FilePreviewPanel({
         </IconBtn>
       </header>
 
-      <div className="border-ctp-surface0 text-ctp-subtext flex shrink-0 items-center justify-between border-b px-3 py-2 font-mono text-[10px] uppercase">
+      <div className="border-border text-muted-foreground flex shrink-0 items-center justify-between border-b px-3 py-2 font-mono text-[10px] uppercase">
         <span>{label}</span>
         {counter && <span>{counter}</span>}
       </div>
@@ -163,7 +163,7 @@ export function FilePreviewPanel({
         entry={entry}
       />
 
-      <footer className="border-ctp-surface0 flex shrink-0 gap-1 border-t p-2">
+      <footer className="border-border flex shrink-0 gap-1 border-t p-2">
         <ActionBtn icon={<Download className="size-3.5" />} onClick={handleDownload}>
           Download
         </ActionBtn>
@@ -256,7 +256,7 @@ function PreviewBody({
         size={entry?.size}
       />
 
-      <dl className="divide-ctp-surface0 divide-y font-mono text-[11px]">
+      <dl className="divide-border divide-y font-mono text-[11px]">
         <Row label="Name" value={name} />
         <Row label="Size" value={entry ? formatBytes(entry.size) : "-"} />
         <Row
@@ -351,14 +351,14 @@ function MediaShell({
   return (
     <div
       className={cn(
-        "border-ctp-surface0 bg-ctp-mantle/40 flex h-64 items-center justify-center border-b",
+        "border-border bg-card/40 flex h-64 items-center justify-center border-b",
         className
       )}
     >
       <div
         className={cn(
           "flex flex-col items-center gap-2",
-          tone === "error" ? "text-ctp-red" : "text-ctp-subtext"
+          tone === "error" ? "text-destructive" : "text-muted-foreground"
         )}
       >
         {children}
@@ -381,7 +381,7 @@ function ImagePreview({ url }: { url: string }) {
   }
 
   return (
-    <div className="border-ctp-surface0 bg-ctp-crust/60 flex max-h-[60vh] min-h-64 items-center justify-center overflow-hidden border-b p-3">
+    <div className="border-border bg-input-bg/60 flex max-h-[60vh] min-h-64 items-center justify-center overflow-hidden border-b p-3">
       <img
         src={url}
         alt=""
@@ -394,7 +394,7 @@ function ImagePreview({ url }: { url: string }) {
 
 function VideoPreview({ url }: { url: string }) {
   return (
-    <div className="border-ctp-surface0 border-b bg-black">
+    <div className="border-border border-b bg-black">
       <video
         key={url}
         src={url}
@@ -408,7 +408,7 @@ function VideoPreview({ url }: { url: string }) {
 
 function AudioPreview({ url }: { url: string }) {
   return (
-    <div className="border-ctp-surface0 bg-ctp-mantle/40 flex h-32 items-center justify-center border-b px-4">
+    <div className="border-border bg-card/40 flex h-32 items-center justify-center border-b px-4">
       <audio key={url} src={url} controls preload="metadata" className="w-full" />
     </div>
   );
@@ -416,7 +416,7 @@ function AudioPreview({ url }: { url: string }) {
 
 function PdfPreview({ url }: { url: string }) {
   return (
-    <div className="border-ctp-surface0 bg-ctp-crust border-b">
+    <div className="border-border bg-input-bg border-b">
       <iframe
         key={url}
         src={url}
@@ -539,7 +539,7 @@ function TextPreview({
   }
 
   return (
-    <div className="border-ctp-surface0 bg-ctp-crust border-b">
+    <div className="border-border bg-input-bg border-b">
       <div className="max-h-[60vh] overflow-auto">
         {lang && html ? (
           <div
@@ -550,7 +550,7 @@ function TextPreview({
               "[&_pre]:!bg-transparent [&_pre]:m-0 [&_pre]:py-2 [&_pre]:pr-3",
               "[&_code]:block [&_code]:[counter-reset:line]",
               "[&_.line]:relative [&_.line]:pl-12",
-              "[&_.line]:before:absolute [&_.line]:before:left-0 [&_.line]:before:w-9 [&_.line]:before:pr-2 [&_.line]:before:text-right [&_.line]:before:text-ctp-subtext [&_.line]:before:select-none",
+              "[&_.line]:before:absolute [&_.line]:before:left-0 [&_.line]:before:w-9 [&_.line]:before:pr-2 [&_.line]:before:text-right [&_.line]:before:text-muted-foreground [&_.line]:before:select-none",
               "[&_.line]:before:[content:counter(line)] [&_.line]:before:[counter-increment:line]"
             )}
             // Shiki escapes input itself, safe to inject.
@@ -561,13 +561,13 @@ function TextPreview({
         )}
       </div>
       {highlighting && lang && (
-        <div className="border-ctp-surface0 text-ctp-subtext bg-ctp-mantle/60 flex items-center gap-1.5 border-t px-3 py-1.5 font-mono text-[10px]">
+        <div className="border-border text-muted-foreground bg-card/60 flex items-center gap-1.5 border-t px-3 py-1.5 font-mono text-[10px]">
           <Loader2 className="size-3 animate-spin" />
           Highlighting...
         </div>
       )}
       {state.truncated && (
-        <div className="border-ctp-surface0 text-ctp-yellow bg-ctp-mantle/60 border-t px-3 py-1.5 font-mono text-[10px]">
+        <div className="border-border text-accent-yellow bg-card/60 border-t px-3 py-1.5 font-mono text-[10px]">
           Truncated to first {formatBytes(TEXT_PREVIEW_BYTES)} - download the
           file for the full contents.
         </div>
@@ -590,10 +590,10 @@ function PlainText({ text }: { text: string }) {
   const gutterWidth = String(lines.length || 1).length;
 
   return (
-    <pre className="text-ctp-text flex font-mono text-[11px] leading-5">
+    <pre className="text-foreground flex font-mono text-[11px] leading-5">
       <code
         aria-hidden
-        className="text-ctp-subtext border-ctp-surface0 bg-ctp-mantle/60 sticky left-0 shrink-0 border-r px-2 py-2 text-right select-none"
+        className="text-muted-foreground border-border bg-card/60 sticky left-0 shrink-0 border-r px-2 py-2 text-right select-none"
       >
         {lines.map((_, i) => (
           <div key={i}>{String(i + 1).padStart(gutterWidth, " ")}</div>
@@ -613,10 +613,10 @@ function PlainText({ text }: { text: string }) {
 function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-start gap-3 px-3 py-2">
-      <dt className="text-ctp-subtext w-20 shrink-0 text-[10px] tracking-wider uppercase">
+      <dt className="text-muted-foreground w-20 shrink-0 text-[10px] tracking-wider uppercase">
         {label}
       </dt>
-      <dd className="text-ctp-text min-w-0 flex-1 break-all">{value}</dd>
+      <dd className="text-foreground min-w-0 flex-1 break-all">{value}</dd>
     </div>
   );
 }
@@ -629,7 +629,7 @@ function IconBtn({
     <button
       type="button"
       className={cn(
-        "text-ctp-subtext hover:bg-ctp-surface0 hover:text-ctp-text inline-flex size-7 shrink-0 items-center justify-center rounded transition-colors disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent",
+        "text-muted-foreground hover:bg-muted hover:text-foreground inline-flex size-7 shrink-0 items-center justify-center rounded transition-colors disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent",
         className
       )}
       {...props}
@@ -647,7 +647,7 @@ function ActionBtn({
     <button
       type="button"
       className={cn(
-        "hover:bg-ctp-surface0 text-ctp-text inline-flex flex-1 items-center justify-center gap-1.5 rounded px-2 py-1.5 font-mono text-[11px] transition-colors",
+        "hover:bg-muted text-foreground inline-flex flex-1 items-center justify-center gap-1.5 rounded px-2 py-1.5 font-mono text-[11px] transition-colors",
         className
       )}
       {...props}

@@ -59,7 +59,7 @@ export function BucketList({
           />
         ))}
         {pinned.length > 0 && other.length > 0 && (
-          <div className="bg-ctp-surface0 mx-2 my-2 h-px" />
+          <div className="bg-muted mx-2 my-2 h-px" />
         )}
         {other.map((b) => (
           <BucketRow
@@ -78,7 +78,7 @@ export function BucketList({
 
 function BucketListHeaders() {
   return (
-    <div className="border-ctp-surface0 text-ctp-text bg-ctp-mantle/30 flex shrink-0 border-b px-4 py-2 text-[11px] font-bold tracking-wider uppercase">
+    <div className="border-border text-foreground bg-card/30 flex shrink-0 border-b px-4 py-2 text-[11px] font-bold tracking-wider uppercase">
       <div className="w-8 shrink-0" />
       <div className="flex-1">Name</div>
       <div className="w-24 text-right">Size</div>
@@ -108,19 +108,19 @@ function BucketRow({
     <div
       onClick={() => onOpen?.(bucket.name)}
       className={cn(
-        "group hover:bg-ctp-surface0 flex cursor-pointer items-center rounded-md px-2",
+        "group hover:bg-muted flex cursor-pointer items-center rounded-md px-2",
         density === "compact" ? "py-1" : "py-2"
       )}
     >
-      <div className="text-ctp-yellow flex w-8 shrink-0 items-center justify-center">
-        {pinned && <Pin className="fill-ctp-yellow size-3" />}
+      <div className="text-accent-yellow flex w-8 shrink-0 items-center justify-center">
+        {pinned && <Pin className="fill-accent-yellow size-3" />}
       </div>
 
       <div className="flex flex-1 items-center gap-3">
         <Icon className={cn("size-5", accent)} />
         <span
           className={cn(
-            "text-ctp-text truncate text-sm",
+            "text-foreground truncate text-sm",
             pinned && "font-medium"
           )}
         >
@@ -144,17 +144,17 @@ function BucketRow({
           className={cn(
             "focus:outline-none",
             pinned
-              ? "text-ctp-yellow"
-              : "text-ctp-subtext hover:text-ctp-yellow"
+              ? "text-accent-yellow"
+              : "text-muted-foreground hover:text-accent-yellow"
           )}
         >
-          <Pin className={cn("size-3.5", pinned && "fill-ctp-yellow")} />
+          <Pin className={cn("size-3.5", pinned && "fill-accent-yellow")} />
         </button>
         <button
           type="button"
           aria-label="More actions"
           onClick={(e) => e.stopPropagation()}
-          className="text-ctp-subtext hover:text-ctp-text focus:outline-none"
+          className="text-muted-foreground hover:text-foreground focus:outline-none"
         >
           <MoreHorizontal className="size-4" />
         </button>
@@ -171,7 +171,7 @@ function Cell({
   width?: string;
 }) {
   return (
-    <div className={cn("text-ctp-subtext text-right font-mono text-xs", width)}>
+    <div className={cn("text-muted-foreground text-right font-mono text-xs", width)}>
       {children}
     </div>
   );

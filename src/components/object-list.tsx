@@ -178,14 +178,14 @@ export const ObjectList = React.memo(ObjectListImpl);
 
 function LoaderRow({ loading }: { loading: boolean }) {
   return (
-    <div className="text-ctp-subtext flex h-full items-center justify-center gap-2 font-mono text-[11px]">
+    <div className="text-muted-foreground flex h-full items-center justify-center gap-2 font-mono text-[11px]">
       {loading ? (
         <>
-          <Loader2 className="text-ctp-mauve size-3.5 animate-spin" />
+          <Loader2 className="text-accent-mauve size-3.5 animate-spin" />
           Loading more...
         </>
       ) : (
-        <span className="text-ctp-subtext">scroll to load more</span>
+        <span className="text-muted-foreground">scroll to load more</span>
       )}
     </div>
   );
@@ -221,7 +221,7 @@ function Header({
   });
 
   return (
-    <div className="border-ctp-surface0 text-ctp-text bg-ctp-crust/50 flex shrink-0 border-b px-4 py-2 font-mono text-[10px] uppercase">
+    <div className="border-border text-foreground bg-input-bg/50 flex shrink-0 border-b px-4 py-2 font-mono text-[10px] uppercase">
       <div className="flex w-8 shrink-0 items-center justify-center">
         <Checkbox
           checked={
@@ -289,8 +289,8 @@ function SortHeader({
       type="button"
       onClick={onClick}
       className={cn(
-        "hover:text-ctp-text flex cursor-pointer items-center gap-1 focus:outline-none",
-        active && "text-ctp-text",
+        "hover:text-foreground flex cursor-pointer items-center gap-1 focus:outline-none",
+        active && "text-foreground",
         className
       )}
     >

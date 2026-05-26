@@ -79,7 +79,7 @@ function BucketPage() {
           description={
             <>
               CloudShelf server isn't responding. Start it with{" "}
-              <code className="bg-ctp-surface0 text-ctp-mauve rounded px-1 py-0.5 font-mono text-[11px]">
+              <code className="bg-muted text-accent-mauve rounded px-1 py-0.5 font-mono text-[11px]">
                 bun run dev:server
               </code>
               .
@@ -177,7 +177,7 @@ function ShellWithEmpty({ children }: { children?: React.ReactNode }) {
           {Array.from({ length: 6 }).map((_, i) => (
             <div
               key={i}
-              className="bg-ctp-surface0/40 h-9 animate-pulse rounded"
+              className="bg-muted/40 h-9 animate-pulse rounded"
               style={{ animationDelay: `${i * 60}ms` }}
             />
           ))}

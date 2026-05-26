@@ -30,18 +30,18 @@ export function DataToolbar({
   return (
     <div
       className={cn(
-        "border-ctp-surface0 flex h-14 shrink-0 items-center justify-between gap-4 border-b px-4",
+        "border-border flex h-14 shrink-0 items-center justify-between gap-4 border-b px-4",
         className
       )}
     >
       <div className="flex min-w-0 items-baseline gap-2">
         {title && (
-          <h1 className="text-ctp-text truncate text-base font-medium">
+          <h1 className="text-foreground truncate text-base font-medium">
             {title}
           </h1>
         )}
         {subtitle && (
-          <span className="text-ctp-subtext truncate font-mono text-xs">
+          <span className="text-muted-foreground truncate font-mono text-xs">
             {subtitle}
           </span>
         )}
@@ -71,13 +71,13 @@ function FilterInput({
 }) {
   return (
     <div className="relative hidden sm:block">
-      <Search className="text-ctp-subtext absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2" />
+      <Search className="text-muted-foreground absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2" />
       <input
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="bg-ctp-crust border-ctp-surface0 text-ctp-text focus:border-ctp-mauve placeholder:text-ctp-surface1 w-48 rounded-md border py-1.5 pr-3 pl-8 font-mono text-xs transition-colors focus:outline-none"
+        className="bg-input-bg border-border text-foreground focus:border-accent-mauve placeholder:text-surface-1 w-48 rounded-md border py-1.5 pr-3 pl-8 font-mono text-xs transition-colors focus:outline-none"
       />
     </div>
   );
@@ -88,7 +88,7 @@ function ViewModeToggle() {
   const setViewMode = usePrefsStore((s) => s.setViewMode);
 
   return (
-    <div className="bg-ctp-crust border-ctp-surface0 flex rounded-md border p-0.5">
+    <div className="bg-input-bg border-border flex rounded-md border p-0.5">
       <ViewModeButton
         active={viewMode === "list"}
         onClick={() => setViewMode("list")}
@@ -127,8 +127,8 @@ function ViewModeButton({
       className={cn(
         "rounded p-1 focus:outline-none",
         active
-          ? "bg-ctp-surface1 text-ctp-text"
-          : "text-ctp-subtext hover:text-ctp-text"
+          ? "bg-surface-1 text-foreground"
+          : "text-muted-foreground hover:text-foreground"
       )}
     >
       {children}

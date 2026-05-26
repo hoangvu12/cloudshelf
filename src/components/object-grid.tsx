@@ -189,14 +189,14 @@ function paddingX(el: HTMLElement): number {
 
 function LoaderRow({ loading }: { loading: boolean }) {
   return (
-    <div className="text-ctp-subtext flex h-full items-center justify-center gap-2 font-mono text-[11px]">
+    <div className="text-muted-foreground flex h-full items-center justify-center gap-2 font-mono text-[11px]">
       {loading ? (
         <>
-          <Loader2 className="text-ctp-mauve size-3.5 animate-spin" />
+          <Loader2 className="text-accent-mauve size-3.5 animate-spin" />
           Loading more...
         </>
       ) : (
-        <span className="text-ctp-subtext">scroll to load more</span>
+        <span className="text-muted-foreground">scroll to load more</span>
       )}
     </div>
   );
@@ -241,10 +241,10 @@ function ObjectTileImpl({
     <div
       onClick={handleClick}
       className={cn(
-        "group border-ctp-surface0 bg-ctp-mantle/40 hover:border-ctp-surface1 hover:bg-ctp-surface0/50 relative flex h-full cursor-pointer flex-col items-center rounded-lg border text-center select-none",
+        "group border-border bg-card/40 hover:border-surface-1 hover:bg-muted/50 relative flex h-full cursor-pointer flex-col items-center rounded-lg border text-center select-none",
         compact ? "gap-1.5 p-2" : "gap-2 p-3",
         selected &&
-          "border-ctp-mauve/60 bg-ctp-surface0 hover:border-ctp-mauve/60"
+          "border-accent-mauve/60 bg-muted hover:border-accent-mauve/60"
       )}
     >
       <div
@@ -264,7 +264,7 @@ function ObjectTileImpl({
       <Icon className={cn(color, compact ? "size-8" : "size-12")} />
       <div
         className={cn(
-          "text-ctp-text w-full truncate text-center",
+          "text-foreground w-full truncate text-center",
           compact ? "text-[11px]" : "text-xs",
           selected && "font-medium"
         )}

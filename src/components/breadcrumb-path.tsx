@@ -55,23 +55,23 @@ export function BreadcrumbPath({
         type="button"
         onClick={handleUp}
         disabled={atHome}
-        className="hover:bg-ctp-surface0 text-ctp-subtext hover:text-ctp-text rounded p-1 focus:outline-none disabled:cursor-not-allowed disabled:opacity-40"
+        className="hover:bg-muted text-muted-foreground hover:text-foreground rounded p-1 focus:outline-none disabled:cursor-not-allowed disabled:opacity-40"
         aria-label="Up one level"
         title="Up one level"
       >
         <ArrowUp className="size-4" />
       </button>
 
-      <div className="bg-ctp-crust border-ctp-surface0 flex min-w-0 items-center rounded border px-3 py-1 text-xs">
-        <FolderOpen className="text-ctp-mauve mr-2 size-3.5 shrink-0" />
+      <div className="bg-input-bg border-border flex min-w-0 items-center rounded border px-3 py-1 text-xs">
+        <FolderOpen className="text-accent-mauve mr-2 size-3.5 shrink-0" />
 
         {atHome ? (
-          <span className="text-ctp-mauve shrink-0 font-bold">Buckets</span>
+          <span className="text-accent-mauve shrink-0 font-bold">Buckets</span>
         ) : (
           <button
             type="button"
             onClick={() => onNavigateHome?.()}
-            className="text-ctp-green shrink-0 font-bold hover:opacity-80 focus:outline-none"
+            className="text-accent-green shrink-0 font-bold hover:opacity-80 focus:outline-none"
           >
             Buckets
           </button>
@@ -79,14 +79,14 @@ export function BreadcrumbPath({
 
         {bucket && (
           <>
-            <span className="text-ctp-subtext mx-2 shrink-0">/</span>
+            <span className="text-muted-foreground mx-2 shrink-0">/</span>
             {atBucketRoot ? (
-              <span className="text-ctp-mauve truncate font-bold">{bucket}</span>
+              <span className="text-accent-mauve truncate font-bold">{bucket}</span>
             ) : (
               <button
                 type="button"
                 onClick={() => onNavigatePrefix?.("")}
-                className="text-ctp-text hover:text-ctp-mauve shrink-0 truncate focus:outline-none"
+                className="text-foreground hover:text-accent-mauve shrink-0 truncate focus:outline-none"
               >
                 {bucket}
               </button>
@@ -99,16 +99,16 @@ export function BreadcrumbPath({
           const target = prefixAtDepth(segments, idx);
           return (
             <React.Fragment key={target}>
-              <span className="text-ctp-subtext mx-2 shrink-0">/</span>
+              <span className="text-muted-foreground mx-2 shrink-0">/</span>
               {isLast ? (
-                <span className="text-ctp-mauve truncate font-bold">
+                <span className="text-accent-mauve truncate font-bold">
                   {segment}
                 </span>
               ) : (
                 <button
                   type="button"
                   onClick={() => onNavigatePrefix?.(target)}
-                  className="text-ctp-text hover:text-ctp-mauve truncate focus:outline-none"
+                  className="text-foreground hover:text-accent-mauve truncate focus:outline-none"
                 >
                   {segment}
                 </button>

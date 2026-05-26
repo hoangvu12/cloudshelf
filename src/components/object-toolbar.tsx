@@ -72,21 +72,21 @@ export function ObjectToolbar({
   return (
     <div
       className={cn(
-        "border-ctp-surface0 relative flex h-14 shrink-0 items-center justify-between gap-4 border-b px-4 transition-colors",
-        isSelectionMode && "bg-ctp-surface0/30",
+        "border-border relative flex h-14 shrink-0 items-center justify-between gap-4 border-b px-4 transition-colors",
+        isSelectionMode && "bg-muted/30",
         className
       )}
     >
       {isSelectionMode ? (
         <div className="flex items-center gap-4">
-          <div className="bg-ctp-mauve/20 text-ctp-mauve border-ctp-mauve/30 flex items-center gap-2 rounded border px-2 py-1 font-mono text-xs font-bold">
+          <div className="bg-accent-mauve/20 text-accent-mauve border-accent-mauve/30 flex items-center gap-2 rounded border px-2 py-1 font-mono text-xs font-bold">
             <CheckSquare className="size-3.5" />
             {selectedCount} selected
           </div>
           <button
             type="button"
             onClick={onClearSelection}
-            className="text-ctp-subtext hover:text-ctp-text font-mono text-[11px] underline underline-offset-2"
+            className="text-muted-foreground hover:text-foreground font-mono text-[11px] underline underline-offset-2"
           >
             Clear
           </button>
@@ -98,7 +98,7 @@ export function ObjectToolbar({
             Upload
           </Button>
           <Button variant="outline" onClick={onNewFolder}>
-            <FolderPlus className="text-ctp-blue" />
+            <FolderPlus className="text-accent-blue" />
             New folder
           </Button>
         </div>
@@ -109,35 +109,35 @@ export function ObjectToolbar({
           <div className="flex items-center gap-1 font-mono text-xs">
             <ActionButton
               onClick={onPreview}
-              icon={<Eye className="text-ctp-mauve" />}
+              icon={<Eye className="text-accent-mauve" />}
               disabled={!canPreview}
               title={canPreview ? undefined : "Select a single file"}
             >
               Preview
             </ActionButton>
-            <ActionButton onClick={onDownloadSelected} icon={<Download className="text-ctp-green" />}>
+            <ActionButton onClick={onDownloadSelected} icon={<Download className="text-accent-green" />}>
               Download
             </ActionButton>
             <ActionButton
               onClick={onCopyLink}
-              icon={<LinkIcon className="text-ctp-sapphire" />}
+              icon={<LinkIcon className="text-accent-sapphire" />}
               disabled={!canCopyLink}
               title={canCopyLink ? undefined : "Select a single file"}
             >
               Copy link
             </ActionButton>
-            <ActionButton onClick={onMove} icon={<FolderOutput className="text-ctp-yellow" />}>
+            <ActionButton onClick={onMove} icon={<FolderOutput className="text-accent-yellow" />}>
               Move
             </ActionButton>
             <ActionButton
               onClick={onRename}
-              icon={<PenLine className="text-ctp-subtext" />}
+              icon={<PenLine className="text-muted-foreground" />}
               disabled={!canRename}
               title={canRename ? undefined : "Select a single item"}
             >
               Rename
             </ActionButton>
-            <div className="bg-ctp-surface1 mx-1 h-4 w-px" />
+            <div className="bg-surface-1 mx-1 h-4 w-px" />
             <ActionButton onClick={onDelete} icon={<Trash2 />} destructive>
               Delete
             </ActionButton>
@@ -151,9 +151,9 @@ export function ObjectToolbar({
         )}
 
         {!isSelectionMode && (
-          <div className="text-ctp-subtext flex gap-3 font-mono text-[11px]">
+          <div className="text-muted-foreground flex gap-3 font-mono text-[11px]">
             <span>{formatCount(totalCount)} items</span>
-            <span className="text-ctp-subtext">|</span>
+            <span className="text-muted-foreground">|</span>
             <span>{formatBytes(totalBytes)} total</span>
           </div>
         )}
@@ -173,14 +173,14 @@ function FilterInput({
 }) {
   return (
     <div className="relative hidden sm:block">
-      <Search className="text-ctp-subtext absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2" />
+      <Search className="text-muted-foreground absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2" />
       <input
         ref={inputRef}
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder="Search in folder..."
-        className="bg-ctp-crust border-ctp-surface0 text-ctp-text focus:border-ctp-mauve placeholder:text-ctp-surface1 w-48 rounded border py-1.5 pr-3 pl-8 font-mono text-xs transition-colors focus:outline-none"
+        className="bg-input-bg border-border text-foreground focus:border-accent-mauve placeholder:text-surface-1 w-48 rounded border py-1.5 pr-3 pl-8 font-mono text-xs transition-colors focus:outline-none"
       />
     </div>
   );
@@ -210,8 +210,8 @@ function ActionButton({
       className={cn(
         "flex items-center gap-1.5 rounded px-2.5 py-1.5 focus:outline-none",
         destructive
-          ? "text-ctp-red hover:bg-ctp-red/20"
-          : "text-ctp-text hover:bg-ctp-surface1",
+          ? "text-destructive hover:bg-destructive/20"
+          : "text-foreground hover:bg-surface-1",
         disabled && "cursor-not-allowed opacity-40 hover:bg-transparent"
       )}
     >

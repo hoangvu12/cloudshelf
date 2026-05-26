@@ -48,7 +48,7 @@ export const SHORTCUTS: { keys: React.ReactNode; action: string }[] = [
 
 export function Kbd({ children }: { children: React.ReactNode }) {
   return (
-    <kbd className="bg-ctp-mantle border-ctp-surface1 text-ctp-text inline-block rounded border border-b-2 px-1.5 py-0.5 font-mono text-[11px] shadow-sm">
+    <kbd className="bg-card border-surface-1 text-foreground inline-block rounded border border-b-2 px-1.5 py-0.5 font-mono text-[11px] shadow-sm">
       {children}
     </kbd>
   );
@@ -59,7 +59,7 @@ export function KeyCombo({ keys }: { keys: string[] }) {
     <>
       {keys.map((k, i) => (
         <React.Fragment key={i}>
-          {i > 0 && <span className="text-ctp-subtext mx-1 text-xs">+</span>}
+          {i > 0 && <span className="text-muted-foreground mx-1 text-xs">+</span>}
           <Kbd>{k}</Kbd>
         </React.Fragment>
       ))}
@@ -87,19 +87,19 @@ export function ShortcutsDialog({
             Press <Kbd>?</Kbd> any time to open this list.
           </DialogDescription>
         </DialogHeader>
-        <div className="border-ctp-surface0 bg-ctp-mantle/50 max-h-[60vh] overflow-auto rounded-lg border">
-          <div className="bg-ctp-surface0/30 border-ctp-surface0 text-ctp-subtext sticky top-0 grid grid-cols-2 border-b p-3 font-mono text-xs font-bold tracking-wider uppercase">
+        <div className="border-border bg-card/50 max-h-[60vh] overflow-auto rounded-lg border">
+          <div className="bg-muted/30 border-border text-muted-foreground sticky top-0 grid grid-cols-2 border-b p-3 font-mono text-xs font-bold tracking-wider uppercase">
             <div>Shortcut</div>
             <div>Action</div>
           </div>
-          <div className="divide-ctp-surface0/50 divide-y text-sm">
+          <div className="divide-border/50 divide-y text-sm">
             {SHORTCUTS.map((s, i) => (
               <div
                 key={i}
-                className="hover:bg-ctp-surface0/20 grid grid-cols-2 items-center p-3"
+                className="hover:bg-muted/20 grid grid-cols-2 items-center p-3"
               >
                 <div className="flex items-center gap-1">{s.keys}</div>
-                <div className="text-ctp-subtext">{s.action}</div>
+                <div className="text-muted-foreground">{s.action}</div>
               </div>
             ))}
           </div>

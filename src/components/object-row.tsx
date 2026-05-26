@@ -78,7 +78,7 @@ function ObjectRowImpl({
       className={cn(
         "group flex cursor-pointer items-center rounded px-2 select-none",
         compact ? "h-7" : "h-9",
-        selected ? "bg-ctp-surface0" : "hover:bg-ctp-surface0/60"
+        selected ? "bg-muted" : "hover:bg-muted/60"
       )}
     >
       <div
@@ -99,7 +99,7 @@ function ObjectRowImpl({
         <FileIcon className={cn("size-5 shrink-0", fileColor)} />
         <span
           className={cn(
-            "text-ctp-text truncate text-sm",
+            "text-foreground truncate text-sm",
             selected && "font-medium"
           )}
         >
@@ -108,7 +108,7 @@ function ObjectRowImpl({
       </div>
 
       <Cell className="w-24 text-right">
-        <span className={selected ? "text-ctp-mauve" : undefined}>
+        <span className={selected ? "text-accent-mauve" : undefined}>
           {isFolder ? "--" : formatBytes(entry.size)}
         </span>
       </Cell>
@@ -130,7 +130,7 @@ function Cell({
   children: React.ReactNode;
 }) {
   return (
-    <div className={cn("text-ctp-subtext font-mono text-xs", className)}>
+    <div className={cn("text-muted-foreground font-mono text-xs", className)}>
       {children}
     </div>
   );

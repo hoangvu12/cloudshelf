@@ -26,12 +26,12 @@ export function EmptyState({
         className
       )}
     >
-      <div className="bg-ctp-surface0/60 border-ctp-surface0 mb-5 flex size-14 items-center justify-center rounded-xl border">
-        <span className="text-ctp-mauve [&_svg]:size-6">{icon}</span>
+      <div className="bg-muted/60 border-border mb-5 flex size-14 items-center justify-center rounded-xl border">
+        <span className="text-accent-mauve [&_svg]:size-6">{icon}</span>
       </div>
-      <h2 className="text-ctp-text mb-1.5 text-sm font-medium">{title}</h2>
+      <h2 className="text-foreground mb-1.5 text-sm font-medium">{title}</h2>
       {description && (
-        <p className="text-ctp-subtext mb-5 max-w-xs text-xs leading-relaxed">
+        <p className="text-muted-foreground mb-5 max-w-xs text-xs leading-relaxed">
           {description}
         </p>
       )}

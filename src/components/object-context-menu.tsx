@@ -83,14 +83,14 @@ function MenuItems({
         disabled={isFolder || selectedCount > 1}
         onSelect={() => onAction(entry, "preview")}
       >
-        <Eye className="text-ctp-mauve" />
+        <Eye className="text-accent-mauve" />
         Preview
       </ContextMenuItem>
       <ContextMenuItem
         disabled={isFolder}
         onSelect={() => onAction(entry, "download")}
       >
-        <Download className="text-ctp-green" />
+        <Download className="text-accent-green" />
         Download
       </ContextMenuItem>
       <ContextMenuItem
@@ -104,7 +104,7 @@ function MenuItems({
         disabled={isFolder || selectedCount > 1}
         onSelect={() => onAction(entry, "copy-link")}
       >
-        <LinkIcon className="text-ctp-sapphire" />
+        <LinkIcon className="text-accent-sapphire" />
         Copy link
       </ContextMenuItem>
       <ContextMenuSeparator />
@@ -116,11 +116,11 @@ function MenuItems({
         Rename
       </ContextMenuItem>
       <ContextMenuItem onSelect={() => onAction(entry, "move")}>
-        <FolderOutput className="text-ctp-yellow" />
+        <FolderOutput className="text-accent-yellow" />
         Move
       </ContextMenuItem>
       <ContextMenuItem onSelect={() => onAction(entry, "copy-to")}>
-        <Copy className="text-ctp-mauve" />
+        <Copy className="text-accent-mauve" />
         Copy to...
       </ContextMenuItem>
       <ContextMenuSeparator />

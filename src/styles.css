@@ -3,35 +3,388 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* ============================================================================
+   Three-tier token architecture (Primer / Spectrum / Catppuccin pattern):
+
+     Tier 1 — Primitive  : raw palette hex values. Never referenced by components.
+     Tier 2 — Semantic   : shadcn contract + accent slots. Palette-agnostic.
+     Tier 3 — Utility    : @theme inline exposes Tier 2 to Tailwind classes.
+
+   Adding a new theme = add a Tier 1 primitive file/block, override Tier 2 inside
+   a `.theme-{name}` selector. Components don't change.
+   ============================================================================ */
+
+/* ── Tier 1: Primitives — Catppuccin Mocha (default) ─────────────────────────
+   Raw hex values. Do not reference these directly in components — go through
+   the semantic aliases below so a palette swap is a single block edit.
+   Defined on `:root` so Mocha is the fallback if no `data-theme` is set
+   (e.g., the brief flash before next-themes initializes). */
+:root,
+[data-theme="mocha"] {
+  --palette-crust: #11111b;
+  --palette-mantle: #181825;
+  --palette-base: #1e1e2e;
+  --palette-surface0: #313244;
+  --palette-surface1: #45475a;
+  --palette-surface2: #585b70;
+  --palette-text: #cdd6f4;
+  /* Brighter than Catppuccin's stock subtext1 (#bac2de) so column headers,
+     status hints, and section labels feel readable. */
+  --palette-subtext: #c8d0e8;
+
+  /* 14 named accents — every theme is expected to provide all 14 slots so
+     the semantic aliases below resolve the same way regardless of theme. */
+  --palette-rosewater: #f5e0dc;
+  --palette-flamingo: #f2cdcd;
+  --palette-pink: #f5c2e7;
+  --palette-mauve: #cba6f7;
+  /* Theme identity color — sits under white foreground text on primary
+     surfaces (buttons, active sidebar item, brand badge). Each theme picks a
+     value that (a) matches its visual identity and (b) clears WCAG AA contrast
+     with white. Mocha uses Latte-flavor mauve since the lighter Mocha mauve
+     fails contrast on primary surfaces. */
+  --palette-primary: #8839ef;
+  --palette-red: #f38ba8;
+  --palette-maroon: #eba0ac;
+  --palette-peach: #fab387;
+  --palette-yellow: #f9e2af;
+  --palette-green: #a6e3a1;
+  --palette-teal: #94e2d5;
+  --palette-sky: #89dceb;
+  --palette-sapphire: #74c7ec;
+  --palette-blue: #89b4fa;
+  --palette-lavender: #b4befe;
+}
+
+/* ── Tier 1: Primitives — Tokyo Night ────────────────────────────────────────
+   Override block; only the primitive vars change. Semantic aliases and Tailwind
+   utilities are untouched, so every component inherits the new palette.
+
+   Neutrals follow Tokyo Night convention: elevated UI (cards/popover/sidebar)
+   are LIGHTER than the body bg. This is the opposite of Catppuccin Mocha,
+   where cards are darker — but the semantic mapping (`--card → --palette-mantle`)
+   absorbs the inversion, so no code changes.
+
+   Accents derived from the canonical Tokyo Night editor palette (enkia/
+   tokyo-night-vscode-theme). Tokyo Night ships ~9 named accents; the remaining
+   Catppuccin slots (rosewater/flamingo/pink/maroon/teal/sapphire/lavender) are
+   filled with the nearest-hue Tokyo Night value or a tuned variant so every
+   `accent-*` utility still resolves to something visually coherent. */
+[data-theme="tokyo-night"] {
+  --palette-crust: #16161e;
+  --palette-base: #1a1b26;
+  --palette-mantle: #24283b;
+  --palette-surface0: #292e42;
+  --palette-surface1: #3b4261;
+  --palette-surface2: #565f89;
+  --palette-text: #c0caf5;
+  --palette-subtext: #a9b1d6;
+
+  --palette-rosewater: #fbe4c0;
+  --palette-flamingo: #ff7a93;
+  --palette-pink: #ad8ee6;
+  --palette-mauve: #bb9af7;
+  /* Tokyo Night's editor identity is blue (#7aa2f7) — use a darker shade
+     so primary surfaces with white text clear WCAG AA. */
+  --palette-primary: #3d59a1;
+  --palette-red: #f7768e;
+  --palette-maroon: #db4b4b;
+  --palette-peach: #ff9e64;
+  --palette-yellow: #e0af68;
+  --palette-green: #9ece6a;
+  --palette-teal: #73daca;
+  --palette-sky: #7dcfff;
+  --palette-sapphire: #2ac3de;
+  --palette-blue: #7aa2f7;
+  --palette-lavender: #9aa5ce;
+}
+
+/* ── Tier 1: Primitives — Nord ───────────────────────────────────────────────
+   Like Tokyo Night, Nord elevates cards LIGHTER than the body bg (polar night
+   0 → 1 → 2 → 3). Accents follow Nord's official families: aurora for warm
+   (red/orange/yellow/green/purple), frost for cool (4 cyans).
+
+   The upstream Discord port only ships 5 accent families; missing Catppuccin
+   slots (rosewater/flamingo/pink/lavender/etc.) are filled from canonical Nord
+   palette values (nordtheme.com) or near-neighbor tints. */
+[data-theme="nord"] {
+  --palette-crust: #232831;
+  --palette-base: #2e3440;
+  --palette-mantle: #3b4252;
+  --palette-surface0: #434c5e;
+  --palette-surface1: #4c566a;
+  --palette-surface2: #6c7a96;
+  --palette-text: #eceff4;
+  --palette-subtext: #d8dee9;
+
+  --palette-rosewater: #e5e9f0;
+  --palette-flamingo: #d08770;
+  --palette-pink: #d3a6c5;
+  --palette-mauve: #b48ead;
+  /* Nord's identity is frost (the four cyans). Darker frost-3 so primary
+     surfaces with white text clear WCAG AA. */
+  --palette-primary: #3e5a76;
+  --palette-red: #bf616a;
+  --palette-maroon: #a14e57;
+  --palette-peach: #d08770;
+  --palette-yellow: #ebcb8b;
+  --palette-green: #a3be8c;
+  --palette-teal: #8fbcbb;
+  --palette-sky: #88c0d0;
+  --palette-sapphire: #81a1c1;
+  --palette-blue: #5e81ac;
+  --palette-lavender: #a4b1c9;
+}
+
+/* ── Tier 1: Primitives — Catppuccin Macchiato ───────────────────────────────
+   Catppuccin's middle-dark flavor; values are canonical from the official spec
+   (catppuccin.com/palette). Cards are DARKER than body (Catppuccin convention,
+   like Mocha — opposite of Tokyo Night/Nord). */
+[data-theme="macchiato"] {
+  --palette-crust: #181926;
+  --palette-mantle: #1e2030;
+  --palette-base: #24273a;
+  --palette-surface0: #363a4f;
+  --palette-surface1: #494d64;
+  --palette-surface2: #5b6078;
+  --palette-text: #cad3f5;
+  --palette-subtext: #b8c0e0;
+
+  --palette-rosewater: #f4dbd6;
+  --palette-flamingo: #f0c6c6;
+  --palette-pink: #f5bde6;
+  --palette-mauve: #c6a0f6;
+  /* Catppuccin Latte mauve — same identity color across all Catppuccin
+     flavors so the brand reads consistently. */
+  --palette-primary: #7c2dd0;
+  --palette-red: #ed8796;
+  --palette-maroon: #ee99a0;
+  --palette-peach: #f5a97f;
+  --palette-yellow: #eed49f;
+  --palette-green: #a6da95;
+  --palette-teal: #8bd5ca;
+  --palette-sky: #91d7e3;
+  --palette-sapphire: #7dc4e4;
+  --palette-blue: #8aadf4;
+  --palette-lavender: #b7bdf8;
+}
+
+/* ── Tier 1: Primitives — Rosé Pine ──────────────────────────────────────────
+   Canonical Rosé Pine vocab: love=red, gold=yellow, rose=pink, pine=teal/green,
+   foam=cyan/blue, iris=mauve. Only 6 native accents; we duplicate where slots
+   overlap (e.g., Rosé Pine has no separate "sapphire" — both blue and sapphire
+   resolve to foam). */
+[data-theme="rose-pine"] {
+  --palette-crust: #14121f;
+  --palette-base: #191724;
+  --palette-mantle: #1f1d2e;
+  --palette-surface0: #26233a;
+  --palette-surface1: #393552;
+  --palette-surface2: #524f67;
+  --palette-text: #e0def4;
+  --palette-subtext: #908caa;
+
+  --palette-rosewater: #ebbcba;
+  --palette-flamingo: #f2c4c2;
+  --palette-pink: #ebbcba;
+  --palette-mauve: #c4a7e7;
+  /* Rosé Pine's canonical primary is iris (purple). */
+  --palette-primary: #6e3275;
+  --palette-red: #eb6f92;
+  --palette-maroon: #c95576;
+  --palette-peach: #e89668;
+  --palette-yellow: #f6c177;
+  --palette-green: #5fa590;
+  --palette-teal: #31748f;
+  --palette-sky: #b3dee0;
+  --palette-sapphire: #9ccfd8;
+  --palette-blue: #6dabb5;
+  --palette-lavender: #b8aef4;
+}
+
+/* ── Tier 1: Primitives — Rosé Pine Moon ─────────────────────────────────────
+   Same accent palette as Rosé Pine with slightly lighter backgrounds and a
+   brighter pine. Canonical from rosepinetheme.com. */
+[data-theme="rose-pine-moon"] {
+  --palette-crust: #16142a;
+  --palette-base: #232136;
+  --palette-mantle: #2a273f;
+  --palette-surface0: #393552;
+  --palette-surface1: #44415a;
+  --palette-surface2: #56536e;
+  --palette-text: #e0def4;
+  --palette-subtext: #908caa;
+
+  --palette-rosewater: #ea9a97;
+  --palette-flamingo: #f2bcb9;
+  --palette-pink: #ea9a97;
+  --palette-mauve: #c4a7e7;
+  /* Rosé Pine's canonical primary is iris (purple). */
+  --palette-primary: #6e3275;
+  --palette-red: #eb6f92;
+  --palette-maroon: #c95576;
+  --palette-peach: #e89668;
+  --palette-yellow: #f6c177;
+  --palette-green: #69b0c4;
+  --palette-teal: #3e8fb0;
+  --palette-sky: #b3e0ea;
+  --palette-sapphire: #9ccfd8;
+  --palette-blue: #6dabb5;
+  --palette-lavender: #b8aef4;
+}
+
+/* ── Tier 1: Primitives — LilyPichu ──────────────────────────────────────────
+   Pink/rose-tinted backgrounds throughout — unusual for a "dark" theme but
+   that's its identity. Crust is intentionally near-black (not pink) to
+   provide WCAG contrast on `text-destructive-foreground` etc. */
+[data-theme="lilypichu"] {
+  --palette-crust: #1a0e12;
+  --palette-base: #482a36;
+  --palette-mantle: #5e3548;
+  --palette-surface0: #74415b;
+  --palette-surface1: #8c4e6c;
+  --palette-surface2: #a86680;
+  --palette-text: #f9d8df;
+  --palette-subtext: #ce97aa;
+
+  --palette-rosewater: #f9d8df;
+  --palette-flamingo: #f4c8d2;
+  --palette-pink: #ea9ab8;
+  /* Discord-port "purple" is a cold #a554b8 — too disconnected from this
+     theme's rose-pink chrome. A rose-magenta still reads as "the mauve slot"
+     but blends with the theme. Note: contrast against `--muted` is marginal
+     here because LilyPichu's surface0 (#74415b) is itself rose-tinted — a
+     constraint of the theme's identity, not a bug. */
+  --palette-mauve: #d670ad;
+  /* LilyPichu's identity is rose, not purple — a deep love-pink reads as
+     "of the theme" instead of feeling like an arbitrary purple stamp. */
+  --palette-primary: #8e2d50;
+  --palette-red: #c95876;
+  --palette-maroon: #a83e5d;
+  --palette-peach: #d68b6c;
+  --palette-yellow: #cdb84b;
+  --palette-green: #40bf95;
+  --palette-teal: #4abfae;
+  --palette-sky: #6dc1e0;
+  --palette-sapphire: #4ba4cd;
+  --palette-blue: #3a8db8;
+  --palette-lavender: #b87dc8;
+}
+
+/* ── Tier 1: Primitives — Vencord (Gruvbox-style) ────────────────────────────
+   Earthy Gruvbox-inspired palette. Only 6 native accents (red/green/yellow/
+   blue-aqua/purple/orange) — non-native Catppuccin slots are filled from
+   tuned variants. */
+[data-theme="vencord"] {
+  --palette-crust: #1d1c1c;
+  --palette-base: #282828;
+  --palette-mantle: #3c3836;
+  --palette-surface0: #443f3c;
+  --palette-surface1: #504a47;
+  --palette-surface2: #6d6664;
+  --palette-text: #f0e4ca;
+  --palette-subtext: #d4be98;
+
+  --palette-rosewater: #f2e5d4;
+  --palette-flamingo: #f2a298;
+  --palette-pink: #d3869b;
+  --palette-mauve: #d3869b;
+  /* Gruvbox's signature primary is dark orange — sets Vencord apart from
+     the purple-leaning themes. */
+  --palette-primary: #af3a03;
+  --palette-red: #ea6962;
+  --palette-maroon: #c25c55;
+  --palette-peach: #e78a4e;
+  --palette-yellow: #d8a656;
+  --palette-green: #a8b665;
+  --palette-teal: #89b482;
+  --palette-sky: #95c1b5;
+  --palette-sapphire: #7daea3;
+  --palette-blue: #7caea3;
+  --palette-lavender: #d3a3b8;
+}
+
+/* ── Tier 2: Semantic aliases — shadcn contract + accent slots ───────────────
+   These names are palette-agnostic. A theme swap rebinds the right-hand
+   side (var(--palette-*)) to a different primitive layer, but the names below
+   stay the same. Components (and Tier 3 utilities) reference only these. */
+:root {
+  --radius: 0.5rem;
+
+  /* shadcn contract */
+  --background: var(--palette-base);
+  --foreground: var(--palette-text);
+  --card: var(--palette-mantle);
+  --card-foreground: var(--palette-text);
+  --popover: var(--palette-mantle);
+  --popover-foreground: var(--palette-text);
+  --primary: var(--palette-primary);
+  --primary-foreground: #ffffff;
+  --secondary: var(--palette-surface0);
+  --secondary-foreground: var(--palette-text);
+  --muted: var(--palette-surface0);
+  --muted-foreground: var(--palette-subtext);
+  --accent: var(--palette-surface0);
+  --accent-foreground: var(--palette-text);
+  --destructive: var(--palette-red);
+  --destructive-foreground: var(--palette-crust);
+  --success: var(--palette-green);
+  --success-foreground: var(--palette-crust);
+  --info: var(--palette-blue);
+  --info-foreground: var(--palette-crust);
+  --border: var(--palette-surface0);
+  --input: var(--palette-surface0);
+  --input-bg: var(--palette-crust);
+  --ring: var(--palette-mauve);
+  --chart-1: var(--palette-blue);
+  --chart-2: var(--palette-green);
+  --chart-3: var(--palette-yellow);
+  --chart-4: var(--palette-mauve);
+  --chart-5: var(--palette-pink);
+  --sidebar: var(--palette-mantle);
+  --sidebar-foreground: var(--palette-text);
+  --sidebar-primary: var(--palette-primary);
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: var(--palette-surface0);
+  --sidebar-accent-foreground: var(--palette-text);
+  --sidebar-border: var(--palette-surface0);
+  --sidebar-ring: var(--palette-mauve);
+
+  /* Neutral elevation extensions. shadcn ships a single muted/secondary
+     depth; we need two more tiers for hover states (surface-1) and faint
+     dividers/separators (surface-2). */
+  --surface-1: var(--palette-surface1);
+  --surface-2: var(--palette-surface2);
+
+  /* Named accent palette — 14 slots, one per Catppuccin accent name. Used
+     for non-semantic color variety (file-type icons, badges, charts). The
+     "shadcn red == destructive" mapping handles the semantic uses; these
+     slots handle the aesthetic uses (e.g., PDF=red but not "destructive"). */
+  --accent-rosewater: var(--palette-rosewater);
+  --accent-flamingo: var(--palette-flamingo);
+  --accent-pink: var(--palette-pink);
+  --accent-mauve: var(--palette-mauve);
+  --accent-red: var(--palette-red);
+  --accent-maroon: var(--palette-maroon);
+  --accent-peach: var(--palette-peach);
+  --accent-yellow: var(--palette-yellow);
+  --accent-green: var(--palette-green);
+  --accent-teal: var(--palette-teal);
+  --accent-sky: var(--palette-sky);
+  --accent-sapphire: var(--palette-sapphire);
+  --accent-blue: var(--palette-blue);
+  --accent-lavender: var(--palette-lavender);
+}
+
+/* ── Tier 3: Tailwind utility exposure ──────────────────────────────────────
+   @theme inline lets utilities like `bg-card` / `text-accent-yellow` resolve
+   to the semantic var, which in turn resolves to a primitive — so utilities
+   pick up theme swaps without rebuilding the CSS. */
 @theme inline {
   --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo,
     Consolas, "Liberation Mono", monospace;
-  /* Catppuccin Mocha — used by the WM-style buckets browser. Standalone palette
-     that doesn't depend on the light/dark theme toggle; the WM aesthetic is
-     intentionally dark-only. */
-  --color-ctp-crust: #11111b;
-  --color-ctp-mantle: #181825;
-  --color-ctp-base: #1e1e2e;
-  --color-ctp-surface0: #313244;
-  --color-ctp-surface1: #45475a;
-  --color-ctp-text: #cdd6f4;
-  /* Brighter than Catppuccin's subtext1 (#bac2de) so column headers, small
-     status hints, and section labels actually feel readable. Stays distinct
-     from --color-ctp-text but reads as light, not gray. */
-  --color-ctp-subtext: #c8d0e8;
-  --color-ctp-mauve: #cba6f7;
-  --color-ctp-pink: #f5c2e7;
-  --color-ctp-red: #f38ba8;
-  --color-ctp-green: #a6e3a1;
-  --color-ctp-blue: #89b4fa;
-  --color-ctp-yellow: #f9e2af;
-  --color-ctp-sapphire: #74c7ec;
-  --color-ctp-peach: #fab387;
-  --color-ctp-maroon: #eba0ac;
-  --color-ctp-teal: #94e2d5;
-  --color-ctp-sky: #89dceb;
-  --color-ctp-lavender: #b4befe;
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -69,6 +422,25 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+
+  --color-accent-rosewater: var(--accent-rosewater);
+  --color-accent-flamingo: var(--accent-flamingo);
+  --color-accent-pink: var(--accent-pink);
+  --color-accent-mauve: var(--accent-mauve);
+  --color-accent-red: var(--accent-red);
+  --color-accent-maroon: var(--accent-maroon);
+  --color-accent-peach: var(--accent-peach);
+  --color-accent-yellow: var(--accent-yellow);
+  --color-accent-green: var(--accent-green);
+  --color-accent-teal: var(--accent-teal);
+  --color-accent-sky: var(--accent-sky);
+  --color-accent-sapphire: var(--accent-sapphire);
+  --color-accent-blue: var(--accent-blue);
+  --color-accent-lavender: var(--accent-lavender);
+
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -76,94 +448,6 @@
   --radius-2xl: calc(var(--radius) + 12px);
   --radius-3xl: calc(var(--radius) + 20px);
   --radius-4xl: calc(var(--radius) + 28px);
-}
-
-:root {
-  --radius: 0.5rem;
-  --background: oklch(0.985 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.985 0 0);
-  --success: oklch(0.65 0.165 156);
-  --success-foreground: oklch(0.985 0 0);
-  --info: oklch(0.6 0.18 252);
-  --info-foreground: oklch(0.985 0 0);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --input-bg: oklch(0.985 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
-}
-
-/* Dark theme maps shadcn semantic tokens onto the Catppuccin Mocha palette so
-   shadcn-styled surfaces (setup form, dropdowns, dialogs) share the buckets
-   browser's identity. Light theme is intentionally unchanged. */
-.dark {
-  --background: #1e1e2e;
-  --foreground: #cdd6f4;
-  --card: #181825;
-  --card-foreground: #cdd6f4;
-  --popover: #181825;
-  --popover-foreground: #cdd6f4;
-  /* Primary uses Catppuccin Latte's mauve (#8839ef) so white text on primary
-     surfaces clears WCAG AAA. The lighter Mocha mauve (#cba6f7) is still
-     available as an accent (--ring, ctp-mauve utility) for focus rings,
-     icons, and selection highlights where it doesn't carry foreground text. */
-  --primary: #8839ef;
-  --primary-foreground: #ffffff;
-  --secondary: #313244;
-  --secondary-foreground: #cdd6f4;
-  --muted: #313244;
-  --muted-foreground: #a6adc8;
-  --accent: #313244;
-  --accent-foreground: #cdd6f4;
-  --destructive: #f38ba8;
-  --destructive-foreground: #11111b;
-  --success: #a6e3a1;
-  --success-foreground: #11111b;
-  --info: #89b4fa;
-  --info-foreground: #11111b;
-  --border: #313244;
-  --input: #313244;
-  --input-bg: #11111b;
-  --ring: #cba6f7;
-  --chart-1: #89b4fa;
-  --chart-2: #a6e3a1;
-  --chart-3: #f9e2af;
-  --chart-4: #cba6f7;
-  --chart-5: #f5c2e7;
-  --sidebar: #181825;
-  --sidebar-foreground: #cdd6f4;
-  --sidebar-primary: #8839ef;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #313244;
-  --sidebar-accent-foreground: #cdd6f4;
-  --sidebar-border: #313244;
-  --sidebar-ring: #cba6f7;
 }
 
 @layer base {
@@ -243,20 +527,20 @@
   animation: bounce-3 1s ease-in-out 3;
 }
 
-/* Scoped Catppuccin scrollbar — applies only inside the buckets browser shell
-   so the setup form keeps the default theme scrollbar. */
-.ctp-scope ::-webkit-scrollbar {
+/* Scoped scrollbar — applies only inside the buckets browser shell so the
+   setup form keeps the default theme scrollbar. */
+.themed-scope ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
-.ctp-scope ::-webkit-scrollbar-track {
-  background: var(--color-ctp-crust);
+.themed-scope ::-webkit-scrollbar-track {
+  background: var(--input-bg);
 }
-.ctp-scope ::-webkit-scrollbar-thumb {
-  background: var(--color-ctp-surface0);
-  border: 2px solid var(--color-ctp-crust);
+.themed-scope ::-webkit-scrollbar-thumb {
+  background: var(--muted);
+  border: 2px solid var(--input-bg);
   border-radius: 4px;
 }
-.ctp-scope ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-ctp-surface1);
+.themed-scope ::-webkit-scrollbar-thumb:hover {
+  background: var(--surface-1);
 }

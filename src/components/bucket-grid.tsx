@@ -67,7 +67,7 @@ export function BucketGrid({
         </Section>
       )}
       {pinned.length > 0 && other.length > 0 && (
-        <div className="bg-ctp-surface0 my-4 h-px" />
+        <div className="bg-muted my-4 h-px" />
       )}
       {other.length > 0 && (
         <Section>
@@ -115,7 +115,7 @@ function BucketCard({
     <div
       onClick={() => onOpen?.(bucket.name)}
       className={cn(
-        "group bg-ctp-mantle/40 border-ctp-surface0 hover:border-ctp-mauve/60 hover:bg-ctp-surface0/30 relative flex cursor-pointer flex-col rounded-lg border",
+        "group bg-card/40 border-border hover:border-accent-mauve/60 hover:bg-muted/30 relative flex cursor-pointer flex-col rounded-lg border",
         compact ? "gap-2 p-3" : "gap-3 p-4"
       )}
     >
@@ -125,13 +125,13 @@ function BucketCard({
         />
         <div className="flex items-center gap-1">
           {pinned && (
-            <Pin className="fill-ctp-yellow text-ctp-yellow size-3" />
+            <Pin className="fill-accent-yellow text-accent-yellow size-3" />
           )}
           <button
             type="button"
             aria-label="More actions"
             onClick={(e) => e.stopPropagation()}
-            className="text-ctp-subtext hover:text-ctp-text opacity-0 group-hover:opacity-100 focus:outline-none"
+            className="text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 focus:outline-none"
           >
             <MoreHorizontal className="size-4" />
           </button>
@@ -141,7 +141,7 @@ function BucketCard({
       <div className="min-w-0">
         <div
           className={cn(
-            "text-ctp-text truncate text-sm",
+            "text-foreground truncate text-sm",
             pinned && "font-medium"
           )}
           title={bucket.name}
@@ -149,16 +149,16 @@ function BucketCard({
           {bucket.name}
         </div>
         {!compact && (
-          <div className="text-ctp-subtext mt-1 truncate font-mono text-[10px]">
+          <div className="text-muted-foreground mt-1 truncate font-mono text-[10px]">
             {formatFileTime(bucket.createdAt)}
           </div>
         )}
       </div>
 
       {!compact && (
-        <div className="border-ctp-surface0 text-ctp-subtext mt-auto flex items-center justify-between border-t pt-2 font-mono text-[10px]">
+        <div className="border-border text-muted-foreground mt-auto flex items-center justify-between border-t pt-2 font-mono text-[10px]">
           <span>{formatBytes(bucket.sizeBytes)}</span>
-          <span className="text-ctp-subtext">·</span>
+          <span className="text-muted-foreground">·</span>
           <span>{formatCount(bucket.objectCount)} items</span>
         </div>
       )}
@@ -173,10 +173,10 @@ function BucketCard({
         }}
         className={cn(
           "absolute top-2 right-2 focus:outline-none",
-          pinned ? "text-ctp-yellow" : "text-ctp-subtext hover:text-ctp-yellow opacity-0 group-hover:opacity-100"
+          pinned ? "text-accent-yellow" : "text-muted-foreground hover:text-accent-yellow opacity-0 group-hover:opacity-100"
         )}
       >
-        <Pin className={cn("size-3.5", pinned && "fill-ctp-yellow")} />
+        <Pin className={cn("size-3.5", pinned && "fill-accent-yellow")} />
       </button>
     </div>
   );

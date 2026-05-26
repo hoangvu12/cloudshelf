@@ -54,7 +54,7 @@ function DrawerContent({
       <DrawerPrimitive.Content
         data-slot="drawer-content"
         className={cn(
-          "group/drawer-content bg-ctp-base fixed z-50 flex h-auto flex-col",
+          "group/drawer-content bg-background fixed z-50 flex h-auto flex-col",
           // Bottom (default direction)
           "data-[vaul-drawer-direction=bottom]:inset-x-0 data-[vaul-drawer-direction=bottom]:bottom-0 data-[vaul-drawer-direction=bottom]:mt-24 data-[vaul-drawer-direction=bottom]:max-h-[80vh] data-[vaul-drawer-direction=bottom]:rounded-t-lg data-[vaul-drawer-direction=bottom]:border-t",
           // Top
@@ -63,13 +63,13 @@ function DrawerContent({
           "data-[vaul-drawer-direction=right]:inset-y-0 data-[vaul-drawer-direction=right]:right-0 data-[vaul-drawer-direction=right]:w-3/4 data-[vaul-drawer-direction=right]:border-l sm:data-[vaul-drawer-direction=right]:max-w-md",
           // Left
           "data-[vaul-drawer-direction=left]:inset-y-0 data-[vaul-drawer-direction=left]:left-0 data-[vaul-drawer-direction=left]:w-3/4 data-[vaul-drawer-direction=left]:border-r sm:data-[vaul-drawer-direction=left]:max-w-md",
-          "border-ctp-surface0",
+          "border-border",
           className
         )}
         {...props}
       >
         {/* Drag handle, only shown for bottom drawers */}
-        <div className="bg-ctp-surface1 mx-auto mt-4 hidden h-2 w-[100px] shrink-0 rounded-full group-data-[vaul-drawer-direction=bottom]/drawer-content:block" />
+        <div className="bg-surface-1 mx-auto mt-4 hidden h-2 w-[100px] shrink-0 rounded-full group-data-[vaul-drawer-direction=bottom]/drawer-content:block" />
         {children}
       </DrawerPrimitive.Content>
     </DrawerPortal>
@@ -103,7 +103,7 @@ function DrawerTitle({
   return (
     <DrawerPrimitive.Title
       data-slot="drawer-title"
-      className={cn("text-ctp-text font-semibold", className)}
+      className={cn("text-foreground font-semibold", className)}
       {...props}
     />
   );
@@ -116,7 +116,7 @@ function DrawerDescription({
   return (
     <DrawerPrimitive.Description
       data-slot="drawer-description"
-      className={cn("text-ctp-subtext text-sm", className)}
+      className={cn("text-muted-foreground text-sm", className)}
       {...props}
     />
   );

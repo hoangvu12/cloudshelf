@@ -32,7 +32,7 @@ export function AppShell({
   return (
     <div
       className={cn(
-        "ctp-scope bg-ctp-base text-ctp-text selection:bg-ctp-mauve/30 flex h-screen w-screen overflow-hidden",
+        "themed-scope bg-background text-foreground selection:bg-accent-mauve/30 flex h-screen w-screen overflow-hidden",
         className
       )}
     >
@@ -45,7 +45,7 @@ export function AppShell({
             "hidden shrink-0 overflow-hidden lg:flex lg:flex-col",
             "transition-[width,border-color] duration-200 ease-out",
             previewOpen
-              ? "border-ctp-surface0 w-[380px] border-l xl:w-[440px]"
+              ? "border-border w-[380px] border-l xl:w-[440px]"
               : "w-0 border-l border-l-transparent"
           )}
         >
@@ -68,7 +68,7 @@ export function AppStatusBar({
   right?: React.ReactNode;
 }) {
   return (
-    <div className="bg-ctp-crust/60 border-ctp-surface0 text-ctp-subtext flex h-7 shrink-0 items-center justify-between border-t px-4 font-mono text-[10px]">
+    <div className="bg-input-bg/60 border-border text-muted-foreground flex h-7 shrink-0 items-center justify-between border-t px-4 font-mono text-[10px]">
       <div className="flex items-center gap-4">{left}</div>
       <div className="flex items-center gap-4">{right}</div>
     </div>

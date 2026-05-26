@@ -752,7 +752,7 @@ export function ObjectBrowser({
       onFiles={handleUploadFiles}
       openRef={openPickerRef}
     >
-      <div className="border-ctp-surface0 bg-ctp-base flex h-12 shrink-0 items-center border-b px-4">
+      <div className="border-border bg-background flex h-12 shrink-0 items-center border-b px-4">
         <BreadcrumbPath
           bucket={bucket}
           prefix={prefix}
@@ -811,7 +811,7 @@ export function ObjectBrowser({
               </span>
               <span>{formatBytes(totalBytes)} total</span>
               {selectedIds.size > 0 && (
-                <span className="text-ctp-mauve">
+                <span className="text-accent-mauve">
                   {selectedIds.size} selected
                 </span>
               )}
@@ -898,7 +898,7 @@ function BrowserBody({
         {Array.from({ length: 10 }).map((_, i) => (
           <div
             key={i}
-            className="bg-ctp-surface0/40 h-9 animate-pulse rounded"
+            className="bg-muted/40 h-9 animate-pulse rounded"
             style={{ animationDelay: `${i * 50}ms` }}
           />
         ))}

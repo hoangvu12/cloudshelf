@@ -5,10 +5,10 @@
  */
 
 // File-type icons use the FILL variant of Material Symbols so each row reads
-// boldly on the dark Catppuccin surface — the outlined variants at weight 400
-// disappear into the background. Imported directly (not via `@/lib/icons`) so
-// the UI chrome can keep its outlined Settings while config files in the list
-// use the filled variant.
+// boldly on the dark surface — the outlined variants at weight 400 disappear
+// into the background. Imported directly (not via `@/lib/icons`) so the UI
+// chrome can keep its outlined Settings while config files in the list use
+// the filled variant.
 import Archive from "@material-symbols/svg-400/outlined/folder_zip-fill.svg?react";
 import File from "@material-symbols/svg-400/outlined/draft-fill.svg?react";
 import FileAudio from "@material-symbols/svg-400/outlined/audio_file-fill.svg?react";
@@ -31,81 +31,81 @@ export interface FileAppearance {
 
 const FALLBACK: FileAppearance = {
   Icon: File,
-  color: "text-ctp-text",
+  color: "text-foreground",
   label: "File",
 };
 
 const BY_EXT: Record<string, FileAppearance> = {
   // Images — warm/cool split so JPEG vs PNG reads at a glance
-  jpg: { Icon: Image, color: "text-ctp-peach", label: "JPEG" },
-  jpeg: { Icon: Image, color: "text-ctp-peach", label: "JPEG" },
-  png: { Icon: Image, color: "text-ctp-sky", label: "PNG" },
-  gif: { Icon: Image, color: "text-ctp-pink", label: "GIF" },
-  webp: { Icon: Image, color: "text-ctp-sky", label: "WebP" },
-  svg: { Icon: Image, color: "text-ctp-mauve", label: "SVG" },
-  avif: { Icon: Image, color: "text-ctp-sky", label: "AVIF" },
-  heic: { Icon: Image, color: "text-ctp-peach", label: "HEIC" },
+  jpg: { Icon: Image, color: "text-accent-peach", label: "JPEG" },
+  jpeg: { Icon: Image, color: "text-accent-peach", label: "JPEG" },
+  png: { Icon: Image, color: "text-accent-sky", label: "PNG" },
+  gif: { Icon: Image, color: "text-accent-pink", label: "GIF" },
+  webp: { Icon: Image, color: "text-accent-sky", label: "WebP" },
+  svg: { Icon: Image, color: "text-accent-mauve", label: "SVG" },
+  avif: { Icon: Image, color: "text-accent-sky", label: "AVIF" },
+  heic: { Icon: Image, color: "text-accent-peach", label: "HEIC" },
 
   // Video — saturated pink
-  mp4: { Icon: FileVideo, color: "text-ctp-pink", label: "MP4 Video" },
-  mov: { Icon: FileVideo, color: "text-ctp-pink", label: "QuickTime" },
-  mkv: { Icon: FileVideo, color: "text-ctp-pink", label: "MKV Video" },
-  webm: { Icon: FileVideo, color: "text-ctp-pink", label: "WebM" },
-  avi: { Icon: FileVideo, color: "text-ctp-pink", label: "AVI" },
+  mp4: { Icon: FileVideo, color: "text-accent-pink", label: "MP4 Video" },
+  mov: { Icon: FileVideo, color: "text-accent-pink", label: "QuickTime" },
+  mkv: { Icon: FileVideo, color: "text-accent-pink", label: "MKV Video" },
+  webm: { Icon: FileVideo, color: "text-accent-pink", label: "WebM" },
+  avi: { Icon: FileVideo, color: "text-accent-pink", label: "AVI" },
 
   // Audio — vivid teal so it doesn't clash with code-green
-  mp3: { Icon: FileAudio, color: "text-ctp-teal", label: "MP3 Audio" },
-  wav: { Icon: FileAudio, color: "text-ctp-teal", label: "WAV Audio" },
-  flac: { Icon: FileAudio, color: "text-ctp-teal", label: "FLAC" },
-  ogg: { Icon: FileAudio, color: "text-ctp-teal", label: "OGG" },
-  m4a: { Icon: FileAudio, color: "text-ctp-teal", label: "M4A" },
+  mp3: { Icon: FileAudio, color: "text-accent-teal", label: "MP3 Audio" },
+  wav: { Icon: FileAudio, color: "text-accent-teal", label: "WAV Audio" },
+  flac: { Icon: FileAudio, color: "text-accent-teal", label: "FLAC" },
+  ogg: { Icon: FileAudio, color: "text-accent-teal", label: "OGG" },
+  m4a: { Icon: FileAudio, color: "text-accent-teal", label: "M4A" },
 
-  // Docs — PDF gets the brightest red (maroon reads more red than ctp-red,
+  // Docs — PDF gets the brightest red (maroon reads more red than accent-red,
   // which leans pink); Word stays sapphire to match its brand
-  pdf: { Icon: FileText, color: "text-ctp-maroon", label: "PDF" },
-  doc: { Icon: FileText, color: "text-ctp-sapphire", label: "Word" },
-  docx: { Icon: FileText, color: "text-ctp-sapphire", label: "Word" },
-  rtf: { Icon: FileText, color: "text-ctp-text", label: "RTF" },
-  txt: { Icon: FileText, color: "text-ctp-text", label: "Text" },
-  md: { Icon: FileCode, color: "text-ctp-lavender", label: "Markdown" },
-  csv: { Icon: FileSpreadsheet, color: "text-ctp-green", label: "CSV" },
-  xls: { Icon: FileSpreadsheet, color: "text-ctp-green", label: "Excel" },
-  xlsx: { Icon: FileSpreadsheet, color: "text-ctp-green", label: "Excel" },
+  pdf: { Icon: FileText, color: "text-accent-maroon", label: "PDF" },
+  doc: { Icon: FileText, color: "text-accent-sapphire", label: "Word" },
+  docx: { Icon: FileText, color: "text-accent-sapphire", label: "Word" },
+  rtf: { Icon: FileText, color: "text-foreground", label: "RTF" },
+  txt: { Icon: FileText, color: "text-foreground", label: "Text" },
+  md: { Icon: FileCode, color: "text-accent-lavender", label: "Markdown" },
+  csv: { Icon: FileSpreadsheet, color: "text-accent-green", label: "CSV" },
+  xls: { Icon: FileSpreadsheet, color: "text-accent-green", label: "Excel" },
+  xlsx: { Icon: FileSpreadsheet, color: "text-accent-green", label: "Excel" },
 
   // Code — keep the language→color associations devs expect
-  js: { Icon: FileCode, color: "text-ctp-yellow", label: "JavaScript" },
-  mjs: { Icon: FileCode, color: "text-ctp-yellow", label: "JavaScript" },
-  cjs: { Icon: FileCode, color: "text-ctp-yellow", label: "JavaScript" },
-  ts: { Icon: FileCode, color: "text-ctp-blue", label: "TypeScript" },
-  tsx: { Icon: FileCode, color: "text-ctp-blue", label: "TSX" },
-  jsx: { Icon: FileCode, color: "text-ctp-sky", label: "JSX" },
-  json: { Icon: FileCode, color: "text-ctp-yellow", label: "JSON" },
-  html: { Icon: FileCode, color: "text-ctp-peach", label: "HTML" },
-  css: { Icon: FileCode, color: "text-ctp-sky", label: "CSS" },
-  py: { Icon: FileCode, color: "text-ctp-yellow", label: "Python" },
-  rs: { Icon: FileCode, color: "text-ctp-peach", label: "Rust" },
-  go: { Icon: FileCode, color: "text-ctp-sapphire", label: "Go" },
-  java: { Icon: FileCode, color: "text-ctp-maroon", label: "Java" },
-  c: { Icon: FileCode, color: "text-ctp-sapphire", label: "C" },
-  cpp: { Icon: FileCode, color: "text-ctp-sapphire", label: "C++" },
-  sh: { Icon: FileCode, color: "text-ctp-green", label: "Shell" },
-  toml: { Icon: Settings, color: "text-ctp-text", label: "TOML" },
-  yaml: { Icon: Settings, color: "text-ctp-text", label: "YAML" },
-  yml: { Icon: Settings, color: "text-ctp-text", label: "YAML" },
-  env: { Icon: Settings, color: "text-ctp-yellow", label: "Env" },
+  js: { Icon: FileCode, color: "text-accent-yellow", label: "JavaScript" },
+  mjs: { Icon: FileCode, color: "text-accent-yellow", label: "JavaScript" },
+  cjs: { Icon: FileCode, color: "text-accent-yellow", label: "JavaScript" },
+  ts: { Icon: FileCode, color: "text-accent-blue", label: "TypeScript" },
+  tsx: { Icon: FileCode, color: "text-accent-blue", label: "TSX" },
+  jsx: { Icon: FileCode, color: "text-accent-sky", label: "JSX" },
+  json: { Icon: FileCode, color: "text-accent-yellow", label: "JSON" },
+  html: { Icon: FileCode, color: "text-accent-peach", label: "HTML" },
+  css: { Icon: FileCode, color: "text-accent-sky", label: "CSS" },
+  py: { Icon: FileCode, color: "text-accent-yellow", label: "Python" },
+  rs: { Icon: FileCode, color: "text-accent-peach", label: "Rust" },
+  go: { Icon: FileCode, color: "text-accent-sapphire", label: "Go" },
+  java: { Icon: FileCode, color: "text-accent-maroon", label: "Java" },
+  c: { Icon: FileCode, color: "text-accent-sapphire", label: "C" },
+  cpp: { Icon: FileCode, color: "text-accent-sapphire", label: "C++" },
+  sh: { Icon: FileCode, color: "text-accent-green", label: "Shell" },
+  toml: { Icon: Settings, color: "text-foreground", label: "TOML" },
+  yaml: { Icon: Settings, color: "text-foreground", label: "YAML" },
+  yml: { Icon: Settings, color: "text-foreground", label: "YAML" },
+  env: { Icon: Settings, color: "text-accent-yellow", label: "Env" },
 
   // Archives — lavender (brighter than mauve, distinct from code-blue)
-  zip: { Icon: Archive, color: "text-ctp-lavender", label: "ZIP Archive" },
-  tar: { Icon: Archive, color: "text-ctp-lavender", label: "Tar Archive" },
-  gz: { Icon: Archive, color: "text-ctp-lavender", label: "GZip" },
-  bz2: { Icon: Archive, color: "text-ctp-lavender", label: "BZip2" },
-  "7z": { Icon: Archive, color: "text-ctp-lavender", label: "7-Zip" },
-  rar: { Icon: Archive, color: "text-ctp-lavender", label: "RAR" },
+  zip: { Icon: Archive, color: "text-accent-lavender", label: "ZIP Archive" },
+  tar: { Icon: Archive, color: "text-accent-lavender", label: "Tar Archive" },
+  gz: { Icon: Archive, color: "text-accent-lavender", label: "GZip" },
+  bz2: { Icon: Archive, color: "text-accent-lavender", label: "BZip2" },
+  "7z": { Icon: Archive, color: "text-accent-lavender", label: "7-Zip" },
+  rar: { Icon: Archive, color: "text-accent-lavender", label: "RAR" },
 
   // Disk images / binaries
-  iso: { Icon: Package, color: "text-ctp-text", label: "ISO Image" },
-  dmg: { Icon: Package, color: "text-ctp-text", label: "Disk Image" },
-  exe: { Icon: Package, color: "text-ctp-maroon", label: "Executable" },
+  iso: { Icon: Package, color: "text-foreground", label: "ISO Image" },
+  dmg: { Icon: Package, color: "text-foreground", label: "Disk Image" },
+  exe: { Icon: Package, color: "text-accent-maroon", label: "Executable" },
 };
 
 export function fileAppearance(name: string): FileAppearance {

@@ -129,8 +129,8 @@ export function UploadPanel() {
   }
 
   return (
-    <div className="ctp-scope pointer-events-none fixed bottom-6 right-6 z-50 w-full max-w-[28rem] sm:max-w-[32rem]">
-      <div className="bg-ctp-base/95 border-ctp-surface1 text-ctp-text pointer-events-auto flex flex-col overflow-hidden rounded-xl border shadow-[0_25px_50px_-12px_rgba(0,0,0,0.8)] backdrop-blur-xl animate-in fade-in-0 slide-in-from-bottom-2 duration-200 ease-out">
+    <div className="themed-scope pointer-events-none fixed bottom-6 right-6 z-50 w-full max-w-[28rem] sm:max-w-[32rem]">
+      <div className="bg-background/95 border-surface-1 text-foreground pointer-events-auto flex flex-col overflow-hidden rounded-xl border shadow-[0_25px_50px_-12px_rgba(0,0,0,0.8)] backdrop-blur-xl animate-in fade-in-0 slide-in-from-bottom-2 duration-200 ease-out">
         <Header
           done={data.done}
           active={data.active}
@@ -142,7 +142,7 @@ export function UploadPanel() {
           onClose={actions.cancelAll}
         />
 
-        <div className="bg-ctp-base/50 flex max-h-[60vh] flex-col overflow-y-auto">
+        <div className="bg-background/50 flex max-h-[60vh] flex-col overflow-y-auto">
           {data.order.map((id) => (
             <UploadRow key={id} id={id} />
           ))}
@@ -185,10 +185,10 @@ function Header({
   onClose: () => void;
 }) {
   return (
-    <div className="bg-ctp-mantle/90 border-ctp-surface1 flex h-12 shrink-0 items-center justify-between border-b px-4">
+    <div className="bg-card/90 border-surface-1 flex h-12 shrink-0 items-center justify-between border-b px-4">
       <div className="flex items-center gap-3">
-        <CloudUpload className="text-ctp-mauve size-4" />
-        <span className="text-ctp-text text-sm font-medium">Transfers</span>
+        <CloudUpload className="text-accent-mauve size-4" />
+        <span className="text-foreground text-sm font-medium">Transfers</span>
       </div>
       <div className="flex items-center gap-4">
         <StatusSummary
@@ -198,19 +198,19 @@ function Header({
           paused={paused}
           failed={failed}
         />
-        <div className="bg-ctp-surface1 h-4 w-px" />
+        <div className="bg-surface-1 h-4 w-px" />
         <div className="flex items-center gap-2">
           <IconButton
             onClick={onMinimize}
             title="Minimize"
-            className="hover:text-ctp-text hover:bg-ctp-surface0"
+            className="hover:text-foreground hover:bg-muted"
           >
             <Minus className="size-3.5" />
           </IconButton>
           <IconButton
             onClick={onClose}
             title={allDone ? "Dismiss" : "Cancel all & dismiss"}
-            className="hover:text-ctp-red hover:bg-ctp-red/10"
+            className="hover:text-destructive hover:bg-destructive/10"
           >
             <X className="size-3.5" />
           </IconButton>
@@ -234,16 +234,16 @@ function StatusSummary({
   failed: number;
 }) {
   const parts: React.ReactNode[] = [];
-  if (done > 0) parts.push(<span key="d" className="text-ctp-green">{done} done</span>);
-  if (active > 0) parts.push(<span key="a" className="text-ctp-mauve">{active} active</span>);
-  if (queued > 0) parts.push(<span key="q" className="text-ctp-subtext">{queued} queued</span>);
-  if (paused > 0) parts.push(<span key="p" className="text-ctp-yellow">{paused} paused</span>);
-  if (failed > 0) parts.push(<span key="f" className="text-ctp-red">{failed} failed</span>);
+  if (done > 0) parts.push(<span key="d" className="text-success">{done} done</span>);
+  if (active > 0) parts.push(<span key="a" className="text-accent-mauve">{active} active</span>);
+  if (queued > 0) parts.push(<span key="q" className="text-muted-foreground">{queued} queued</span>);
+  if (paused > 0) parts.push(<span key="p" className="text-accent-yellow">{paused} paused</span>);
+  if (failed > 0) parts.push(<span key="f" className="text-destructive">{failed} failed</span>);
   return (
-    <div className="text-ctp-subtext flex items-center gap-1.5 font-mono text-[11px]">
+    <div className="text-muted-foreground flex items-center gap-1.5 font-mono text-[11px]">
       {parts.map((p, i) => (
         <React.Fragment key={i}>
-          {i > 0 && <span className="text-ctp-surface2">·</span>}
+          {i > 0 && <span className="text-surface-2">·</span>}
           {p}
         </React.Fragment>
       ))}
@@ -273,7 +273,7 @@ function Footer({
   onResumeAll: () => void;
 }) {
   return (
-    <div className="bg-ctp-mantle/90 border-ctp-surface1 flex shrink-0 items-center justify-between gap-2 border-t p-3">
+    <div className="bg-card/90 border-surface-1 flex shrink-0 items-center justify-between gap-2 border-t p-3">
       <TuiButton
         onClick={onClearFinished}
         disabled={finishedCount === 0}
@@ -310,8 +310,8 @@ function UploadRow({ id }: { id: string }) {
   if (!item) return null;
 
   const wrapperClasses = cn(
-    "group border-ctp-surface0 hover:bg-ctp-surface0/30 border-b p-4 transition-colors",
-    item.status === "failed" && "bg-ctp-red/5",
+    "group border-border hover:bg-muted/30 border-b p-4 transition-colors",
+    item.status === "failed" && "bg-destructive/5",
     item.status === "canceled" && "opacity-60"
   );
 
@@ -333,13 +333,13 @@ function UploadRow({ id }: { id: string }) {
             item={item}
             right={
               <>
-                <span className="text-ctp-subtext font-mono text-[10px] tracking-wider uppercase">
+                <span className="text-muted-foreground font-mono text-[10px] tracking-wider uppercase">
                   Queued
                 </span>
                 <IconButton
                   onClick={() => actions.cancel(id)}
                   title="Cancel"
-                  className="hover:text-ctp-red hover:bg-ctp-surface1"
+                  className="hover:text-destructive hover:bg-surface-1"
                 >
                   <X className="size-3.5" />
                 </IconButton>
@@ -380,7 +380,7 @@ function UploadRow({ id }: { id: string }) {
           <CompactRow
             item={item}
             right={
-              <span className="text-ctp-subtext font-mono text-[10px] tracking-wider uppercase">
+              <span className="text-muted-foreground font-mono text-[10px] tracking-wider uppercase">
                 Canceled
               </span>
             }
@@ -410,7 +410,7 @@ function UploadingRow({
           <Icon className={cn("mt-0.5 size-5 shrink-0", color)} />
           <div className="min-w-0">
             <div
-              className="text-ctp-text truncate text-sm font-medium"
+              className="text-foreground truncate text-sm font-medium"
               title={item.fileName}
             >
               {item.fileName}
@@ -423,7 +423,7 @@ function UploadingRow({
             <IconButton
               onClick={onPause}
               title="Pause"
-              className="hover:text-ctp-peach hover:bg-ctp-surface1"
+              className="hover:text-accent-peach hover:bg-surface-1"
             >
               <Pause className="size-3.5" />
             </IconButton>
@@ -431,27 +431,27 @@ function UploadingRow({
           <IconButton
             onClick={onCancel}
             title="Cancel"
-            className="hover:text-ctp-red hover:bg-ctp-surface1"
+            className="hover:text-destructive hover:bg-surface-1"
           >
             <X className="size-3.5" />
           </IconButton>
         </div>
       </div>
       <div>
-        <div className="bg-ctp-surface0 mb-2 h-1.5 w-full overflow-hidden rounded-full">
+        <div className="bg-muted mb-2 h-1.5 w-full overflow-hidden rounded-full">
           <div
-            className="bg-ctp-mauve relative h-full rounded-full shadow-[0_0_10px_rgba(203,166,247,0.4)] transition-[width] duration-200 ease-linear"
+            className="bg-accent-mauve relative h-full rounded-full shadow-[0_0_10px_rgba(203,166,247,0.4)] transition-[width] duration-200 ease-linear"
             style={{ width: `${pct}%` }}
           />
         </div>
         <div className="flex items-center justify-between font-mono text-[10px]">
-          <div className="text-ctp-mauve font-bold">
+          <div className="text-accent-mauve font-bold">
             {pct.toFixed(0)}%
-            <span className="text-ctp-subtext ml-1 font-normal">
+            <span className="text-muted-foreground ml-1 font-normal">
               · {formatBytes(item.bytesUploaded)} of {formatBytes(item.size)}
             </span>
           </div>
-          <div className="text-ctp-subtext">
+          <div className="text-muted-foreground">
             {item.speedBps > 0 ? (
               <>
                 {formatSpeed(item.speedBps)}
@@ -460,14 +460,14 @@ function UploadingRow({
                   item.etaSeconds < 24 * 3600 && (
                     <>
                       {" · "}
-                      <span className="text-ctp-text">
+                      <span className="text-foreground">
                         {formatEta(item.etaSeconds)} left
                       </span>
                     </>
                   )}
               </>
             ) : (
-              <span className="text-ctp-peach">Stalled · retrying…</span>
+              <span className="text-accent-peach">Stalled · retrying…</span>
             )}
           </div>
         </div>
@@ -501,13 +501,13 @@ function CompletedRow({ item }: { item: UploadItem }) {
       <div className="flex items-center gap-3 overflow-hidden pr-2">
         <div className="relative shrink-0">
           <Icon className={cn("size-5", color)} />
-          <div className="bg-ctp-base absolute -bottom-1 -right-1 rounded-full">
-            <CheckCircle2 className="text-ctp-green fill-ctp-green/20 size-3.5" />
+          <div className="bg-background absolute -bottom-1 -right-1 rounded-full">
+            <CheckCircle2 className="text-success fill-success/20 size-3.5" />
           </div>
         </div>
         <div className="min-w-0">
           <div
-            className="text-ctp-text decoration-ctp-surface2 truncate text-sm font-medium line-through"
+            className="text-foreground decoration-surface-2 truncate text-sm font-medium line-through"
             title={item.fileName}
           >
             {item.fileName}
@@ -520,7 +520,7 @@ function CompletedRow({ item }: { item: UploadItem }) {
           type="button"
           onClick={handleCopyLink}
           disabled={copying}
-          className="text-ctp-subtext hover:text-ctp-blue hover:bg-ctp-surface1 flex items-center gap-1.5 rounded px-2 py-1 font-mono text-xs transition-colors disabled:opacity-50"
+          className="text-muted-foreground hover:text-accent-blue hover:bg-surface-1 flex items-center gap-1.5 rounded px-2 py-1 font-mono text-xs transition-colors disabled:opacity-50"
         >
           <LinkIcon className="size-3" />
           {copying ? "Copying..." : "Copy Link"}
@@ -548,7 +548,7 @@ function PausedRow({
           <Icon className={cn("mt-0.5 size-5 shrink-0", color)} />
           <div className="min-w-0">
             <div
-              className="text-ctp-text truncate text-sm font-medium"
+              className="text-foreground truncate text-sm font-medium"
               title={item.fileName}
             >
               {item.fileName}
@@ -560,34 +560,34 @@ function PausedRow({
           <IconButton
             onClick={onResume}
             title="Resume"
-            className="hover:text-ctp-green hover:bg-ctp-surface1"
+            className="hover:text-success hover:bg-surface-1"
           >
             <Play className="size-3.5" />
           </IconButton>
           <IconButton
             onClick={onCancel}
             title="Cancel"
-            className="hover:text-ctp-red hover:bg-ctp-surface1"
+            className="hover:text-destructive hover:bg-surface-1"
           >
             <X className="size-3.5" />
           </IconButton>
         </div>
       </div>
       <div>
-        <div className="bg-ctp-surface0 mb-2 h-1.5 w-full overflow-hidden rounded-full">
+        <div className="bg-muted mb-2 h-1.5 w-full overflow-hidden rounded-full">
           <div
-            className="bg-ctp-mauve h-full rounded-full shadow-[0_0_10px_rgba(203,166,247,0.4)]"
+            className="bg-accent-mauve h-full rounded-full shadow-[0_0_10px_rgba(203,166,247,0.4)]"
             style={{ width: `${pct}%` }}
           />
         </div>
         <div className="flex items-center justify-between font-mono text-[10px]">
-          <div className="text-ctp-mauve font-bold">
+          <div className="text-accent-mauve font-bold">
             {pct.toFixed(0)}%
-            <span className="text-ctp-subtext ml-1 font-normal">
+            <span className="text-muted-foreground ml-1 font-normal">
               · {formatBytes(item.bytesUploaded)} of {formatBytes(item.size)}
             </span>
           </div>
-          <span className="text-ctp-peach tracking-wider uppercase">
+          <span className="text-accent-peach tracking-wider uppercase">
             Paused
           </span>
         </div>
@@ -611,19 +611,19 @@ function FailedRow({
       <div className="flex items-center gap-3 overflow-hidden pr-2">
         <div className="relative shrink-0">
           <Icon className={cn("size-5", color)} />
-          <div className="bg-ctp-base absolute -bottom-1 -right-1 rounded-full">
-            <XCircle className="text-ctp-red fill-ctp-red/20 size-3.5" />
+          <div className="bg-background absolute -bottom-1 -right-1 rounded-full">
+            <XCircle className="text-destructive fill-destructive/20 size-3.5" />
           </div>
         </div>
         <div className="min-w-0">
           <div
-            className="text-ctp-text truncate text-sm font-medium"
+            className="text-foreground truncate text-sm font-medium"
             title={item.fileName}
           >
             {item.fileName}
           </div>
           <div
-            className="text-ctp-red mt-0.5 truncate font-mono text-[10px]"
+            className="text-destructive mt-0.5 truncate font-mono text-[10px]"
             title={item.lastError}
           >
             Failed: {item.lastError ?? "Upload error"}
@@ -634,14 +634,14 @@ function FailedRow({
         <IconButton
           onClick={onRetry}
           title="Retry"
-          className="hover:text-ctp-text hover:bg-ctp-surface1"
+          className="hover:text-foreground hover:bg-surface-1"
         >
           <RotateCw className="size-3.5" />
         </IconButton>
         <IconButton
           onClick={onCancel}
           title="Dismiss"
-          className="hover:text-ctp-red hover:bg-ctp-surface1"
+          className="hover:text-destructive hover:bg-surface-1"
         >
           <X className="size-3.5" />
         </IconButton>
@@ -664,7 +664,7 @@ function CompactRow({
         <Icon className={cn("size-5 shrink-0", color)} />
         <div className="min-w-0">
           <div
-            className="text-ctp-text truncate text-sm font-medium"
+            className="text-foreground truncate text-sm font-medium"
             title={item.fileName}
           >
             {item.fileName}
@@ -690,15 +690,15 @@ function MetaLine({ item, inline = false }: { item: UploadItem; inline?: boolean
   return (
     <div
       className={cn(
-        "text-ctp-subtext flex items-center gap-1.5 truncate font-mono text-[10px]",
+        "text-muted-foreground flex items-center gap-1.5 truncate font-mono text-[10px]",
         !inline && "mt-1"
       )}
       title={display}
     >
       <span>{label}</span>
-      <span className="text-ctp-surface2">·</span>
+      <span className="text-surface-2">·</span>
       <span>{formatBytes(item.size)}</span>
-      <span className="text-ctp-surface2">·</span>
+      <span className="text-surface-2">·</span>
       <CornerDownRight className="size-3 shrink-0" />
       <span className="truncate">{display}</span>
     </div>
@@ -728,11 +728,11 @@ function MinimizedPanel({
     ? `All ${total} uploaded`
     : `Uploading ${active} of ${active + queued}`;
   return (
-    <div className="ctp-scope pointer-events-none fixed bottom-6 right-6 z-50">
+    <div className="themed-scope pointer-events-none fixed bottom-6 right-6 z-50">
       <button
         type="button"
         onClick={onExpand}
-        className="bg-ctp-base/95 border-ctp-surface1 hover:border-ctp-subtext text-ctp-text pointer-events-auto flex w-72 items-center gap-3 rounded-full border px-4 py-2 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.8)] backdrop-blur-xl transition-colors animate-in fade-in-0 slide-in-from-bottom-2 duration-200 ease-out"
+        className="bg-background/95 border-surface-1 hover:border-muted-foreground text-foreground pointer-events-auto flex w-72 items-center gap-3 rounded-full border px-4 py-2 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.8)] backdrop-blur-xl transition-colors animate-in fade-in-0 slide-in-from-bottom-2 duration-200 ease-out"
       >
         <div className="relative flex size-6 shrink-0 items-center justify-center">
           <svg className="size-6 -rotate-90" viewBox="0 0 24 24">
@@ -743,7 +743,7 @@ function MinimizedPanel({
               stroke="currentColor"
               strokeWidth="2"
               fill="none"
-              className="text-ctp-surface1"
+              className="text-surface-1"
             />
             <circle
               cx="12"
@@ -757,14 +757,14 @@ function MinimizedPanel({
               strokeLinecap="round"
               className={cn(
                 "transition-[stroke-dashoffset] duration-200 ease-linear",
-                allDone ? "text-ctp-green" : "text-ctp-mauve"
+                allDone ? "text-success" : "text-accent-mauve"
               )}
             />
           </svg>
           {allDone ? (
-            <CheckCircle2 className="text-ctp-green absolute size-3" />
+            <CheckCircle2 className="text-success absolute size-3" />
           ) : (
-            <ArrowUp className="text-ctp-mauve absolute size-3" />
+            <ArrowUp className="text-accent-mauve absolute size-3" />
           )}
         </div>
         <div className="min-w-0 flex-1">
@@ -773,23 +773,23 @@ function MinimizedPanel({
             <span
               className={cn(
                 "font-mono text-[10px] font-bold",
-                allDone ? "text-ctp-green" : "text-ctp-mauve"
+                allDone ? "text-success" : "text-accent-mauve"
               )}
             >
               {progress.toFixed(0)}%
             </span>
           </div>
-          <div className="bg-ctp-surface0 mt-1.5 h-1 w-full overflow-hidden rounded-full">
+          <div className="bg-muted mt-1.5 h-1 w-full overflow-hidden rounded-full">
             <div
               className={cn(
                 "h-full rounded-full transition-[width] duration-200 ease-linear",
-                allDone ? "bg-ctp-green" : "bg-ctp-mauve"
+                allDone ? "bg-success" : "bg-accent-mauve"
               )}
               style={{ width: `${progress}%` }}
             />
           </div>
         </div>
-        <div className="border-ctp-surface1 text-ctp-subtext flex shrink-0 items-center gap-1 border-l pl-2">
+        <div className="border-surface-1 text-muted-foreground flex shrink-0 items-center gap-1 border-l pl-2">
           <Maximize2 className="size-3.5" />
         </div>
       </button>
@@ -816,7 +816,7 @@ function IconButton({
       onClick={onClick}
       title={title}
       className={cn(
-        "text-ctp-subtext rounded p-1 transition-colors focus:outline-none",
+        "text-muted-foreground rounded p-1 transition-colors focus:outline-none",
         className
       )}
     >
@@ -838,17 +838,17 @@ function TuiButton({
 }) {
   const colorClass =
     color === "red"
-      ? "text-ctp-red"
+      ? "text-destructive"
       : color === "peach"
-        ? "text-ctp-peach"
-        : "text-ctp-subtext";
+        ? "text-accent-peach"
+        : "text-muted-foreground";
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        "border-ctp-surface1 hover:border-ctp-subtext hover:bg-ctp-surface0 rounded border bg-transparent px-2 py-1 font-mono text-[10px] transition-colors disabled:opacity-40 disabled:hover:border-ctp-surface1 disabled:hover:bg-transparent",
+        "border-surface-1 hover:border-muted-foreground hover:bg-muted rounded border bg-transparent px-2 py-1 font-mono text-[10px] transition-colors disabled:opacity-40 disabled:hover:border-surface-1 disabled:hover:bg-transparent",
         colorClass
       )}
     >

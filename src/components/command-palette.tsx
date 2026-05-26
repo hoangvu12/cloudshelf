@@ -40,7 +40,7 @@ export function CommandPalette({
           aria-describedby={undefined}
           className={cn(
             "fixed top-32 left-1/2 z-50 w-full max-w-2xl -translate-x-1/2",
-            "bg-ctp-base border-ctp-mauve overflow-hidden rounded-xl border-2",
+            "bg-background border-accent-mauve overflow-hidden rounded-xl border-2",
             "shadow-[0_0_40px_rgba(203,166,247,0.15)] outline-none",
             "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95",
             "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95"
@@ -50,26 +50,26 @@ export function CommandPalette({
             Command palette
           </DialogPrimitive.Title>
           <Command className="bg-transparent">
-            <div className="bg-ctp-base border-ctp-surface0 flex items-center gap-3 border-b p-4">
-              <Search className="text-ctp-mauve size-5 shrink-0" />
+            <div className="bg-background border-border flex items-center gap-3 border-b p-4">
+              <Search className="text-accent-mauve size-5 shrink-0" />
               <Command.Input
                 autoFocus
                 placeholder="Search buckets, actions, or settings..."
-                className="placeholder:text-ctp-surface1 text-ctp-text w-full border-none bg-transparent font-mono text-lg outline-none"
+                className="placeholder:text-surface-1 text-foreground w-full border-none bg-transparent font-mono text-lg outline-none"
               />
-              <kbd className="bg-ctp-surface0 text-ctp-subtext border-ctp-surface1 rounded border px-1.5 py-0.5 font-mono text-[10px]">
+              <kbd className="bg-muted text-muted-foreground border-surface-1 rounded border px-1.5 py-0.5 font-mono text-[10px]">
                 ESC
               </kbd>
             </div>
-            <Command.List className="bg-ctp-mantle max-h-[400px] overflow-y-auto p-2 font-mono text-sm">
-              <Command.Empty className="text-ctp-subtext px-3 py-6 text-center text-xs">
+            <Command.List className="bg-card max-h-[400px] overflow-y-auto p-2 font-mono text-sm">
+              <Command.Empty className="text-muted-foreground px-3 py-6 text-center text-xs">
                 No matches.
               </Command.Empty>
 
               {buckets.length > 0 && (
                 <Command.Group
                   heading="Buckets"
-                  className="[&_[cmdk-group-heading]]:text-ctp-subtext [&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:py-2 [&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-bold [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group-heading]]:uppercase"
+                  className="[&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:py-2 [&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-bold [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group-heading]]:uppercase"
                 >
                   {buckets.map((b) => (
                     <PaletteItem
@@ -81,7 +81,7 @@ export function CommandPalette({
                       }}
                       icon={<Database className="text-yellow-300 size-4" />}
                       trailing={
-                        <span className="text-ctp-subtext text-[10px]">
+                        <span className="text-muted-foreground text-[10px]">
                           {formatBytes(b.sizeBytes)}
                         </span>
                       }
@@ -94,12 +94,12 @@ export function CommandPalette({
 
               <Command.Group
                 heading="Actions"
-                className="[&_[cmdk-group-heading]]:text-ctp-subtext [&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:pt-4 [&_[cmdk-group-heading]]:pb-2 [&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-bold [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group-heading]]:uppercase"
+                className="[&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:pt-4 [&_[cmdk-group-heading]]:pb-2 [&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-bold [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group-heading]]:uppercase"
               >
                 <PaletteItem
                   value="action create new bucket"
                   onSelect={close}
-                  icon={<FolderPlus className="text-ctp-mauve size-4" />}
+                  icon={<FolderPlus className="text-accent-mauve size-4" />}
                 >
                   Create new bucket
                 </PaletteItem>
@@ -109,7 +109,7 @@ export function CommandPalette({
                     navigate({ to: "/setup" });
                     close();
                   }}
-                  icon={<Settings className="text-ctp-subtext size-4" />}
+                  icon={<Settings className="text-muted-foreground size-4" />}
                 >
                   Open configuration
                 </PaletteItem>
@@ -140,8 +140,8 @@ function PaletteItem({
       value={value}
       onSelect={onSelect}
       className={cn(
-        "text-ctp-subtext flex cursor-pointer items-center gap-3 rounded px-3 py-2",
-        "data-[selected=true]:bg-ctp-surface0/70 data-[selected=true]:text-ctp-text"
+        "text-muted-foreground flex cursor-pointer items-center gap-3 rounded px-3 py-2",
+        "data-[selected=true]:bg-muted/70 data-[selected=true]:text-foreground"
       )}
     >
       {icon}

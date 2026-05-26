@@ -2,16 +2,37 @@ import { ThemeProvider as NextThemesProvider } from "next-themes";
 import type { ThemeProviderProps } from "next-themes";
 
 /**
- * The app is locked to dark — the Catppuccin Mocha palette is core to the
- * visual identity, and the buckets browser uses hardcoded ctp-* classes that
- * don't respond to a light toggle. Light tokens are left in styles.css in
- * case we ever want to revive a light mode, but they're not reachable here.
+ * Tokens are themeable via a three-tier architecture (see styles.css). Each
+ * theme defines its own primitive palette under a `[data-theme="X"]` block;
+ * semantic aliases and Tailwind utilities never change.
+ *
+ * Adding a theme:
+ *   1. Add a `[data-theme="name"]` primitive block in styles.css
+ *   2. Add the name to THEMES below
+ *   3. Surface it in the settings appearance picker
+ *
+ * The `dark` class is hardcoded on <html> (see index.html) so shadcn's
+ * `dark:` variant keeps working — every theme we ship is dark-aesthetic.
  */
+export const THEMES = [
+  "mocha",
+  "macchiato",
+  "tokyo-night",
+  "nord",
+  "rose-pine",
+  "rose-pine-moon",
+  "lilypichu",
+  "vencord",
+] as const;
+export type ThemeName = (typeof THEMES)[number];
+
 export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
   return (
     <NextThemesProvider
-      attribute="class"
-      forcedTheme="dark"
+      attribute="data-theme"
+      defaultTheme="mocha"
+      themes={[...THEMES]}
+      enableSystem={false}
       disableTransitionOnChange
       {...props}
     >

@@ -74,7 +74,7 @@ function HomePage() {
         />
       }
     >
-      <div className="border-ctp-surface0 bg-ctp-base flex h-12 shrink-0 items-center border-b px-4">
+      <div className="border-border bg-background flex h-12 shrink-0 items-center border-b px-4">
         <BreadcrumbPath />
       </div>
 
@@ -199,7 +199,7 @@ function BucketsMain({
           description={
             <>
               CloudShelf server isn't responding. Start it with{" "}
-              <code className="bg-ctp-surface0 text-ctp-mauve rounded px-1 py-0.5 font-mono text-[11px]">
+              <code className="bg-muted text-accent-mauve rounded px-1 py-0.5 font-mono text-[11px]">
                 bun run dev:server
               </code>
               .
@@ -276,7 +276,7 @@ function BucketsLoading() {
       {Array.from({ length: 6 }).map((_, i) => (
         <div
           key={i}
-          className="bg-ctp-surface0/40 h-9 animate-pulse rounded-md"
+          className="bg-muted/40 h-9 animate-pulse rounded-md"
           style={{ animationDelay: `${i * 60}ms` }}
         />
       ))}

@@ -22,28 +22,28 @@ const VARIANT_STYLES: Record<
   { wrapper: string; icon: string; title: string; desc: string }
 > = {
   success: {
-    wrapper: "bg-ctp-green/10 border-ctp-green/30",
-    icon: "text-ctp-green",
-    title: "text-ctp-green",
-    desc: "text-ctp-green/80",
+    wrapper: "bg-success/10 border-success/30",
+    icon: "text-success",
+    title: "text-success",
+    desc: "text-success/80",
   },
   error: {
-    wrapper: "bg-ctp-red/10 border-ctp-red/30",
-    icon: "text-ctp-red",
-    title: "text-ctp-red",
-    desc: "text-ctp-red/80",
+    wrapper: "bg-destructive/10 border-destructive/30",
+    icon: "text-destructive",
+    title: "text-destructive",
+    desc: "text-destructive/80",
   },
   info: {
-    wrapper: "bg-ctp-blue/10 border-ctp-blue/30",
-    icon: "text-ctp-blue",
-    title: "text-ctp-blue",
-    desc: "text-ctp-blue/80",
+    wrapper: "bg-info/10 border-info/30",
+    icon: "text-info",
+    title: "text-info",
+    desc: "text-info/80",
   },
   warning: {
-    wrapper: "bg-ctp-yellow/10 border-ctp-yellow/30",
-    icon: "text-ctp-yellow",
-    title: "text-ctp-yellow",
-    desc: "text-ctp-yellow/80",
+    wrapper: "bg-accent-yellow/10 border-accent-yellow/30",
+    icon: "text-accent-yellow",
+    title: "text-accent-yellow",
+    desc: "text-accent-yellow/80",
   },
 };
 
