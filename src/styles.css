@@ -1,0 +1,223 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo,
+    Consolas, "Liberation Mono", monospace;
+  /* Catppuccin Mocha — used by the WM-style buckets browser. Standalone palette
+     that doesn't depend on the light/dark theme toggle; the WM aesthetic is
+     intentionally dark-only. */
+  --color-ctp-crust: #11111b;
+  --color-ctp-mantle: #181825;
+  --color-ctp-base: #1e1e2e;
+  --color-ctp-surface0: #313244;
+  --color-ctp-surface1: #45475a;
+  --color-ctp-text: #cdd6f4;
+  --color-ctp-subtext: #a6adc8;
+  --color-ctp-mauve: #cba6f7;
+  --color-ctp-pink: #f5c2e7;
+  --color-ctp-red: #f38ba8;
+  --color-ctp-green: #a6e3a1;
+  --color-ctp-blue: #89b4fa;
+  --color-ctp-yellow: #f9e2af;
+  --color-ctp-sapphire: #74c7ec;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-input-bg: var(--input-bg);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 12px);
+  --radius-3xl: calc(var(--radius) + 20px);
+  --radius-4xl: calc(var(--radius) + 28px);
+}
+
+:root {
+  --radius: 0.5rem;
+  --background: oklch(0.985 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.985 0 0);
+  --success: oklch(0.65 0.165 156);
+  --success-foreground: oklch(0.985 0 0);
+  --info: oklch(0.6 0.18 252);
+  --info-foreground: oklch(0.985 0 0);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --input-bg: oklch(0.985 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+}
+
+/* Dark theme maps shadcn semantic tokens onto the Catppuccin Mocha palette so
+   shadcn-styled surfaces (setup form, dropdowns, dialogs) share the buckets
+   browser's identity. Light theme is intentionally unchanged. */
+.dark {
+  --background: #1e1e2e;
+  --foreground: #cdd6f4;
+  --card: #181825;
+  --card-foreground: #cdd6f4;
+  --popover: #181825;
+  --popover-foreground: #cdd6f4;
+  /* Primary uses Catppuccin Latte's mauve (#8839ef) so white text on primary
+     surfaces clears WCAG AAA. The lighter Mocha mauve (#cba6f7) is still
+     available as an accent (--ring, ctp-mauve utility) for focus rings,
+     icons, and selection highlights where it doesn't carry foreground text. */
+  --primary: #8839ef;
+  --primary-foreground: #ffffff;
+  --secondary: #313244;
+  --secondary-foreground: #cdd6f4;
+  --muted: #313244;
+  --muted-foreground: #a6adc8;
+  --accent: #313244;
+  --accent-foreground: #cdd6f4;
+  --destructive: #f38ba8;
+  --destructive-foreground: #11111b;
+  --success: #a6e3a1;
+  --success-foreground: #11111b;
+  --info: #89b4fa;
+  --info-foreground: #11111b;
+  --border: #313244;
+  --input: #313244;
+  --input-bg: #11111b;
+  --ring: #cba6f7;
+  --chart-1: #89b4fa;
+  --chart-2: #a6e3a1;
+  --chart-3: #f9e2af;
+  --chart-4: #cba6f7;
+  --chart-5: #f5c2e7;
+  --sidebar: #181825;
+  --sidebar-foreground: #cdd6f4;
+  --sidebar-primary: #8839ef;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #313244;
+  --sidebar-accent-foreground: #cdd6f4;
+  --sidebar-border: #313244;
+  --sidebar-ring: #cba6f7;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  /* Restore Tailwind v3's default — v4 ships <button> with cursor: default. */
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: var(--font-sans);
+    font-feature-settings: "rlig" 1, "calt" 1, "cv11" 1, "ss01" 1;
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--muted-foreground);
+  }
+
+  input[type="password"]::-ms-reveal,
+  input[type="password"]::-ms-clear {
+    display: none;
+  }
+}
+
+/* Scoped Catppuccin scrollbar — applies only inside the buckets browser shell
+   so the setup form keeps the default theme scrollbar. */
+.ctp-scope ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.ctp-scope ::-webkit-scrollbar-track {
+  background: var(--color-ctp-crust);
+}
+.ctp-scope ::-webkit-scrollbar-thumb {
+  background: var(--color-ctp-surface0);
+  border: 2px solid var(--color-ctp-crust);
+  border-radius: 4px;
+}
+.ctp-scope ::-webkit-scrollbar-thumb:hover {
+  background: var(--color-ctp-surface1);
+}
