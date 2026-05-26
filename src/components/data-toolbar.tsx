@@ -18,7 +18,8 @@ export function DataToolbar({
   primaryAction,
   className,
 }: {
-  title: React.ReactNode;
+  /** Optional — when the breadcrumb above already names the view, leave this blank. */
+  title?: React.ReactNode;
   subtitle?: React.ReactNode;
   filter: string;
   onFilterChange: (next: string) => void;
@@ -29,14 +30,16 @@ export function DataToolbar({
   return (
     <div
       className={cn(
-        "border-ctp-surface0 flex h-14 shrink-0 items-center justify-between gap-4 border-b px-5",
+        "border-ctp-surface0 flex h-14 shrink-0 items-center justify-between gap-4 border-b px-4",
         className
       )}
     >
       <div className="flex min-w-0 items-baseline gap-2">
-        <h1 className="text-ctp-text truncate text-base font-medium">
-          {title}
-        </h1>
+        {title && (
+          <h1 className="text-ctp-text truncate text-base font-medium">
+            {title}
+          </h1>
+        )}
         {subtitle && (
           <span className="text-ctp-subtext truncate font-mono text-xs">
             {subtitle}

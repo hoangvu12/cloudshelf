@@ -5,33 +5,56 @@ import { cn } from "@/lib/utils";
 import { prefixAtDepth, prefixSegments } from "@/lib/object-path";
 
 /**
- * Terminal-style breadcrumb: bucket name in green → mid segments in mauve-hover
- * → current segment bold mauve. Up arrow on the left navigates to parent.
- * Each segment is independently clickable and routes to its prefix.
+ * Terminal-style breadcrumb that always starts at the "Buckets" root. When
+ * `bucket` is omitted, the row collapses to just the root crumb (used on the
+ * home page so its chrome matches the in-bucket layout). When `bucket` is
+ * set, segments inside `prefix` are appended after the bucket name.
+ *
+ * Up arrow navigates one level up:
+ *   - on the home page: disabled
+ *   - at the bucket root: navigates back to "/"
+ *   - inside a folder: navigates to the parent prefix
  */
 export function BreadcrumbPath({
   bucket,
-  prefix,
-  onNavigate,
+  prefix = "",
+  onNavigatePrefix,
+  onNavigateHome,
   className,
 }: {
-  bucket: string;
-  /** Trailing-slash prefix or empty string for bucket root. */
-  prefix: string;
+  /** Omit to render the home-page crumb ("Buckets" only). */
+  bucket?: string;
+  /** Trailing-slash prefix or empty string for bucket root. Ignored when no bucket. */
+  prefix?: string;
   /** Called with the prefix to navigate to (empty string = bucket root). */
-  onNavigate: (prefix: string) => void;
+  onNavigatePrefix?: (prefix: string) => void;
+  /** Called when the user clicks the "Buckets" root or up-arrows past it. */
+  onNavigateHome?: () => void;
   className?: string;
 }) {
-  const segments = React.useMemo(() => prefixSegments(prefix), [prefix]);
-  const parent = segments.length > 0 ? prefixAtDepth(segments, segments.length - 2) : "";
-  const atRoot = segments.length === 0;
+  const segments = React.useMemo(
+    () => (bucket ? prefixSegments(prefix) : []),
+    [bucket, prefix]
+  );
+  const atHome = !bucket;
+  const atBucketRoot = !!bucket && segments.length === 0;
+
+  const handleUp = () => {
+    if (atHome) return;
+    if (atBucketRoot) {
+      onNavigateHome?.();
+      return;
+    }
+    const parent = prefixAtDepth(segments, segments.length - 2);
+    onNavigatePrefix?.(parent);
+  };
 
   return (
     <div className={cn("flex min-w-0 items-center gap-2 font-mono", className)}>
       <button
         type="button"
-        onClick={() => onNavigate(parent)}
-        disabled={atRoot}
+        onClick={handleUp}
+        disabled={atHome}
         className="hover:bg-ctp-surface0 text-ctp-subtext hover:text-ctp-text rounded p-1 focus:outline-none disabled:cursor-not-allowed disabled:opacity-40"
         aria-label="Up one level"
         title="Up one level"
@@ -41,16 +64,35 @@ export function BreadcrumbPath({
 
       <div className="bg-ctp-crust border-ctp-surface0 flex min-w-0 items-center rounded border px-3 py-1 text-xs">
         <FolderOpen className="text-ctp-mauve mr-2 size-3.5 shrink-0" />
-        <button
-          type="button"
-          onClick={() => onNavigate("")}
-          className={cn(
-            "text-ctp-green shrink-0 font-bold hover:opacity-80 focus:outline-none",
-            atRoot && "cursor-default opacity-100"
-          )}
-        >
-          {bucket}
-        </button>
+
+        {atHome ? (
+          <span className="text-ctp-mauve shrink-0 font-bold">Buckets</span>
+        ) : (
+          <button
+            type="button"
+            onClick={() => onNavigateHome?.()}
+            className="text-ctp-green shrink-0 font-bold hover:opacity-80 focus:outline-none"
+          >
+            Buckets
+          </button>
+        )}
+
+        {bucket && (
+          <>
+            <span className="text-ctp-surface1 mx-2 shrink-0">/</span>
+            {atBucketRoot ? (
+              <span className="text-ctp-mauve truncate font-bold">{bucket}</span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => onNavigatePrefix?.("")}
+                className="text-ctp-text hover:text-ctp-mauve shrink-0 truncate focus:outline-none"
+              >
+                {bucket}
+              </button>
+            )}
+          </>
+        )}
 
         {segments.map((segment, idx) => {
           const isLast = idx === segments.length - 1;
@@ -65,7 +107,7 @@ export function BreadcrumbPath({
               ) : (
                 <button
                   type="button"
-                  onClick={() => onNavigate(target)}
+                  onClick={() => onNavigatePrefix?.(target)}
                   className="text-ctp-text hover:text-ctp-mauve truncate focus:outline-none"
                 >
                   {segment}

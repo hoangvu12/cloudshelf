@@ -4,6 +4,7 @@ import { Database, Plug, ServerCrash, ServerOff } from "@/lib/icons";
 
 import { AppShell, AppStatusBar } from "@/components/app-shell";
 import { AppSidebar } from "@/components/app-sidebar";
+import { BreadcrumbPath } from "@/components/breadcrumb-path";
 import { BucketList } from "@/components/bucket-list";
 import { BucketGrid } from "@/components/bucket-grid";
 import {
@@ -73,9 +74,12 @@ function HomePage() {
         />
       }
     >
+      <div className="border-ctp-surface0 bg-ctp-base flex h-12 shrink-0 items-center border-b px-4">
+        <BreadcrumbPath />
+      </div>
+
       <DataToolbar
-        title="Buckets"
-        subtitle={activeConnection?.name}
+        title={activeConnection?.name}
         filter={filter}
         onFilterChange={setFilter}
         primaryAction={

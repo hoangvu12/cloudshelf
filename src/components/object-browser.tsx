@@ -756,7 +756,8 @@ export function ObjectBrowser({
         <BreadcrumbPath
           bucket={bucket}
           prefix={prefix}
-          onNavigate={navigateToPrefix}
+          onNavigatePrefix={navigateToPrefix}
+          onNavigateHome={() => navigate({ to: "/" })}
         />
       </div>
 
