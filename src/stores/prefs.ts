@@ -12,6 +12,7 @@ interface PrefsState {
   concurrentParts: number;
   overwriteWarning: boolean;
   resumeOnReload: boolean;
+  compressImages: boolean;
   setViewMode: (mode: ViewMode) => void;
   setDensity: (d: RowDensity) => void;
   patch: (p: Partial<PrefsState>) => void;
@@ -27,6 +28,7 @@ export const usePrefsStore = create<PrefsState>()(
       concurrentParts: 4,
       overwriteWarning: true,
       resumeOnReload: true,
+      compressImages: false,
       setViewMode: (viewMode) => set({ viewMode }),
       setDensity: (density) => set({ density }),
       patch: (p) => set(p),

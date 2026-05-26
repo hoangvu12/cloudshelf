@@ -231,6 +231,7 @@ function UploadsSection() {
   const concurrentParts = usePrefsStore((s) => s.concurrentParts);
   const overwriteWarning = usePrefsStore((s) => s.overwriteWarning);
   const resumeOnReload = usePrefsStore((s) => s.resumeOnReload);
+  const compressImages = usePrefsStore((s) => s.compressImages);
   const patch = usePrefsStore((s) => s.patch);
 
   return (
@@ -280,6 +281,12 @@ function UploadsSection() {
           description="When you re-add the same file after a refresh, skip parts that already uploaded."
           checked={resumeOnReload}
           onChange={(v) => patch({ resumeOnReload: v })}
+        />
+        <SettingToggleRow
+          label="Compress images before upload"
+          description="Re-encodes JPEG/PNG/WEBP images at 80% quality to save bandwidth and storage. Originals on disk are untouched. Off by default — your uploads stay pixel-perfect."
+          checked={compressImages}
+          onChange={(v) => patch({ compressImages: v })}
         />
       </div>
     </SectionShell>

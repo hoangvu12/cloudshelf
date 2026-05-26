@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 import { formatBytes, formatCount } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { useCopied } from "@/lib/use-copied";
+import { usePrefsStore } from "@/stores/prefs";
 
 /**
  * Two-mode toolbar that morphs based on selection state:
@@ -110,6 +111,7 @@ export function ObjectToolbar({
             <FolderPlus className="text-accent-blue" />
             New folder
           </Button>
+          <CompressBadge />
         </div>
       )}
 
@@ -199,6 +201,40 @@ function FilterInput({
         className="bg-input-bg border-border text-foreground focus:border-primary-text placeholder:text-surface-1 w-48 rounded border py-1.5 pr-3 pl-8 font-mono text-xs transition-colors focus:outline-none"
       />
     </div>
+  );
+}
+
+/** Toolbar pill that mirrors and toggles the global `compressImages` pref.
+ *  Always visible while the user can see Upload/New folder so they can flip
+ *  the behavior just before dropping or picking files — single source of
+ *  truth, same value the Settings page reads. */
+function CompressBadge() {
+  const compressImages = usePrefsStore((s) => s.compressImages);
+  const patch = usePrefsStore((s) => s.patch);
+  return (
+    <button
+      type="button"
+      onClick={() => patch({ compressImages: !compressImages })}
+      title={
+        compressImages
+          ? "Images will be re-encoded at 80% quality before upload. Click to upload originals instead."
+          : "Originals upload as-is. Click to enable image compression (smaller files, same visual quality)."
+      }
+      className={cn(
+        "hidden h-9 shrink-0 items-center gap-1.5 rounded-md border px-2.5 font-mono text-[11px] transition-colors sm:inline-flex",
+        compressImages
+          ? "border-accent-green/40 bg-accent-green/10 text-accent-green hover:bg-accent-green/20"
+          : "border-surface-1 bg-input-bg text-muted-foreground hover:text-foreground hover:border-muted-foreground"
+      )}
+    >
+      <span
+        className={cn(
+          "size-1.5 rounded-full",
+          compressImages ? "bg-accent-green" : "bg-muted-foreground/50"
+        )}
+      />
+      Compress {compressImages ? "on" : "off"}
+    </button>
   );
 }
 

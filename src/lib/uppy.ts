@@ -18,6 +18,8 @@
 import Uppy, { type UppyFile } from "@uppy/core";
 import AwsS3 from "@uppy/aws-s3";
 import GoldenRetriever from "@uppy/golden-retriever";
+import ThumbnailGenerator from "@uppy/thumbnail-generator";
+import Compressor from "@uppy/compressor";
 import {
   deleteResume,
   fingerprint,
@@ -87,6 +89,37 @@ async function jsonOrThrow(res: Response): Promise<unknown> {
   return res.json();
 }
 
+/**
+ * Compressor that only operates on files whose meta.compressImages is true.
+ * Lets the pref toggle (or per-batch override) decide compression per file
+ * without us having to add/remove plugins at runtime.
+ *
+ * The base plugin's prepareUpload is the function registered as a
+ * pre-processor; we narrow the fileIDs list before delegating. Filtered-out
+ * files still need preprocess-progress/complete emitted so Uppy's
+ * preprocessing barrier knows they're done with *this* preprocessor.
+ */
+class GatedCompressor extends Compressor<AnyMeta, AnyMeta> {
+  async prepareUpload(fileIDs: string[]): Promise<void> {
+    const toCompress: string[] = [];
+    const toSkip: string[] = [];
+    for (const id of fileIDs) {
+      const file = this.uppy.getFile(id);
+      if (file && file.meta.compressImages === true) {
+        toCompress.push(id);
+      } else {
+        toSkip.push(id);
+      }
+    }
+    for (const id of toSkip) {
+      const file = this.uppy.getFile(id);
+      if (file) this.uppy.emit("preprocess-complete", file);
+    }
+    if (toCompress.length === 0) return;
+    return super.prepareUpload(toCompress);
+  }
+}
+
 let uppyInstance: Uppy<AnyMeta, AnyMeta> | null = null;
 
 export function getUppy(): Uppy<AnyMeta, AnyMeta> {
@@ -124,6 +157,31 @@ export function getUppy(): Uppy<AnyMeta, AnyMeta> {
       maxFileSize: 2 * GiB,
       maxTotalSize: 5 * GiB,
     } as unknown as { name?: string; version?: number },
+  });
+
+  // Generate small data-URL previews for image files so the upload panel can
+  // show real thumbnails instead of a generic file icon. Headless usage: no
+  // target — we just listen for `thumbnail:generated` in stores/uploads.ts.
+  uppy.use(ThumbnailGenerator, {
+    thumbnailWidth: 80,
+    thumbnailType: "image/jpeg",
+    waitForThumbnailsBeforeUpload: false,
+  });
+
+  // Image compression, gated per-file on `file.meta.compressImages`. The flag
+  // is set in stores/uploads.ts addFiles() from whatever the pref was at the
+  // moment the user dropped/picked the files, so the user's intent is locked
+  // in even if they toggle the pref mid-upload. GatedCompressor below
+  // filters fileIDs by that flag before delegating to Compressor's own
+  // prepareUpload, so files explicitly tagged as "don't compress" pass
+  // through untouched.
+  uppy.use(GatedCompressor, {
+    // CompressorJS default is 0.6, aggressive. 0.8 keeps the visible quality
+    // intact while still shaving ~30-40% off typical photos.
+    quality: 0.8,
+    // Skip if the result wouldn't actually save anything (e.g. small PNG
+    // screenshots, already-tiny JPEGs).
+    convertSize: 1024 * 1024,
   });
 
   uppy.use(AwsS3, {

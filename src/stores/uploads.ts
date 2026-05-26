@@ -49,6 +49,10 @@ export interface UploadItem {
   etaSeconds: number | null;
   lastError?: string;
   strategy: UploadStrategy;
+  /** Data-URL thumbnail from @uppy/thumbnail-generator; only populated for
+   *  image files. Undefined while the thumbnail is still being generated or
+   *  for non-image content. */
+  preview?: string;
 }
 
 type AnyMeta = Record<string, unknown>;
@@ -153,6 +157,11 @@ export function onUploadCompleted(listener: CompletionListener): () => void {
 // the UI can show the canceled row until clearFinished sweeps it away.
 const canceledSnapshots = new Map<string, UploadItem>();
 
+// ─── Thumbnail previews ────────────────────────────────────────────────────
+// data-URL previews keyed by file id, emitted by @uppy/thumbnail-generator.
+// Kept out-of-band from the items map so refresh() doesn't tear them down.
+const previews = new Map<string, string>();
+
 // ─── Status derivation ─────────────────────────────────────────────────────
 function deriveStatus(file: UppyFile<AnyMeta, AnyMeta>): UploadStatus {
   if (file.error) return "failed";
@@ -213,6 +222,7 @@ function toItem(file: UppyFile<AnyMeta, AnyMeta>): UploadItem {
     etaSeconds,
     lastError,
     strategy: size >= MULTIPART_THRESHOLD ? "multipart" : "single",
+    preview: previews.get(file.id),
   };
 }
 
@@ -258,6 +268,13 @@ export const useUploadsStore = create<UploadsState>((set) => {
   uppy.on("upload-retry", refresh);
   uppy.on("pause-all", refresh);
   uppy.on("resume-all", refresh);
+  uppy.on("thumbnail:generated", (file, preview) => {
+    previews.set(file.id, preview);
+    refresh();
+  });
+  uppy.on("file-removed", (file) => {
+    if (file) previews.delete(file.id);
+  });
 
   return {
     items: {},
@@ -266,7 +283,12 @@ export const useUploadsStore = create<UploadsState>((set) => {
       addFiles: ({ connectionId, bucket, prefix }, files) => {
         const ids: string[] = [];
         const norm = prefix && !prefix.endsWith("/") ? `${prefix}/` : prefix;
-        const resumeEnabled = usePrefsStore.getState().resumeOnReload;
+        const prefs = usePrefsStore.getState();
+        const resumeEnabled = prefs.resumeOnReload;
+        // Lock the compression decision in at the moment of upload — if the
+        // user flips the pref mid-upload, files already in flight should
+        // keep whatever behavior they were queued with.
+        const compressImages = prefs.compressImages;
         for (const file of files) {
           const key = `${norm}${file.name}`;
           const meta: UploadMetaIndexed = {
@@ -274,6 +296,7 @@ export const useUploadsStore = create<UploadsState>((set) => {
             bucket,
             key,
             prefix,
+            compressImages,
           };
           let id: string;
           try {
@@ -368,6 +391,7 @@ export const useUploadsStore = create<UploadsState>((set) => {
           if (f.progress.uploadComplete || f.error) {
             uppy.removeFile(f.id);
             samples.delete(f.id);
+            previews.delete(f.id);
           }
         }
         refresh();
@@ -377,6 +401,7 @@ export const useUploadsStore = create<UploadsState>((set) => {
         uppy.cancelAll();
         canceledSnapshots.clear();
         samples.clear();
+        previews.clear();
         refresh();
       },
     },

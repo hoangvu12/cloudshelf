@@ -304,6 +304,35 @@ function Footer({
   );
 }
 
+// ─── Row icon / thumbnail ────────────────────────────────────────────────────
+
+/** Renders the small left-side glyph for an upload row. When @uppy/thumbnail-
+ *  generator has produced a data-URL preview for an image file we show that;
+ *  everything else falls back to the file-type icon. Size is fixed at 20px so
+ *  layouts in every row variant stay aligned. */
+function RowIcon({
+  item,
+  className,
+}: {
+  item: UploadItem;
+  className?: string;
+}) {
+  const { Icon, color } = fileAppearance(item.fileName);
+  if (item.preview) {
+    return (
+      <img
+        src={item.preview}
+        alt=""
+        className={cn(
+          "border-surface-1 size-5 shrink-0 rounded-sm border object-cover",
+          className
+        )}
+      />
+    );
+  }
+  return <Icon className={cn("size-5 shrink-0", color, className)} />;
+}
+
 // ─── Rows ────────────────────────────────────────────────────────────────────
 
 function UploadRow({ id }: { id: string }) {
@@ -402,14 +431,13 @@ function UploadingRow({
   onPause: () => void;
 }) {
   const pct = item.size > 0 ? (item.bytesUploaded / item.size) * 100 : 0;
-  const { Icon, color } = fileAppearance(item.fileName);
   // Pause is only meaningful for multipart — single-PUT can't resume.
   const canPause = item.strategy === "multipart";
   return (
     <>
       <div className="mb-3 flex items-start justify-between">
         <div className="flex items-start gap-3 overflow-hidden pr-2">
-          <Icon className={cn("mt-0.5 size-5 shrink-0", color)} />
+          <RowIcon item={item} className="mt-0.5" />
           <div className="min-w-0">
             <div
               className="text-foreground truncate text-sm font-medium"
@@ -479,7 +507,6 @@ function UploadingRow({
 }
 
 function CompletedRow({ item }: { item: UploadItem }) {
-  const { Icon, color } = fileAppearance(item.fileName);
   const [copying, setCopying] = React.useState(false);
   const [copied, flashCopied] = useCopied();
   const handleCopyLink = async () => {
@@ -503,7 +530,7 @@ function CompletedRow({ item }: { item: UploadItem }) {
     <div className="flex items-center justify-between">
       <div className="flex items-center gap-3 overflow-hidden pr-2">
         <div className="relative shrink-0">
-          <Icon className={cn("size-5", color)} />
+          <RowIcon item={item} />
           <div className="bg-background absolute -bottom-1 -right-1 rounded-full">
             <CheckCircle2 className="text-success fill-success/20 size-3.5" />
           </div>
@@ -559,12 +586,11 @@ function PausedRow({
   onCancel: () => void;
 }) {
   const pct = item.size > 0 ? (item.bytesUploaded / item.size) * 100 : 0;
-  const { Icon, color } = fileAppearance(item.fileName);
   return (
     <>
       <div className="mb-3 flex items-start justify-between">
         <div className="flex items-start gap-3 overflow-hidden pr-2">
-          <Icon className={cn("mt-0.5 size-5 shrink-0", color)} />
+          <RowIcon item={item} className="mt-0.5" />
           <div className="min-w-0">
             <div
               className="text-foreground truncate text-sm font-medium"
@@ -624,12 +650,11 @@ function FailedRow({
   onRetry: () => void;
   onCancel: () => void;
 }) {
-  const { Icon, color } = fileAppearance(item.fileName);
   return (
     <div className="flex items-center justify-between">
       <div className="flex items-center gap-3 overflow-hidden pr-2">
         <div className="relative shrink-0">
-          <Icon className={cn("size-5", color)} />
+          <RowIcon item={item} />
           <div className="bg-background absolute -bottom-1 -right-1 rounded-full">
             <XCircle className="text-destructive fill-destructive/20 size-3.5" />
           </div>
@@ -676,11 +701,10 @@ function CompactRow({
   item: UploadItem;
   right: React.ReactNode;
 }) {
-  const { Icon, color } = fileAppearance(item.fileName);
   return (
     <div className="flex items-center justify-between">
       <div className="flex items-center gap-3 overflow-hidden pr-2">
-        <Icon className={cn("size-5 shrink-0", color)} />
+        <RowIcon item={item} />
         <div className="min-w-0">
           <div
             className="text-foreground truncate text-sm font-medium"
