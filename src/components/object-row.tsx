@@ -75,6 +75,7 @@ function ObjectRowImpl({
   return (
     <div
       onClick={handleRowClick}
+      data-entry-id={id}
       className={cn(
         "group flex cursor-pointer items-center rounded px-2 select-none",
         compact ? "h-7" : "h-9",

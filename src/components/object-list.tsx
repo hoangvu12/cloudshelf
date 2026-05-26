@@ -5,7 +5,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ObjectRow, type RowClickModifiers } from "@/components/object-row";
-import { ObjectContextMenu } from "@/components/object-context-menu";
+import { ObjectListContextMenu } from "@/components/object-context-menu";
 import { entryId } from "@/lib/object-path";
 import { useSelectionStore } from "@/stores/selection";
 import { usePrefsStore } from "@/stores/prefs";
@@ -115,7 +115,7 @@ function ObjectListImpl({
   }, [items, visible.length, hasNextPage, isFetchingNextPage, onLoadMore]);
 
   return (
-    <>
+    <ObjectListContextMenu visible={visible} onAction={onContextAction}>
       <Header
         visible={visible}
         sortKey={sortKey}
@@ -156,21 +156,19 @@ function ObjectListImpl({
             const entry = visible[virtualRow.index]!;
             return (
               <div key={virtualRow.key} style={wrapperStyle}>
-                <ObjectContextMenu entry={entry} onAction={onContextAction}>
-                  <ObjectRow
-                    entry={entry}
-                    currentPrefix={currentPrefix}
-                    compact={density === "compact"}
-                    onSelectRow={onSelectRow}
-                    onOpen={onOpen}
-                  />
-                </ObjectContextMenu>
+                <ObjectRow
+                  entry={entry}
+                  currentPrefix={currentPrefix}
+                  compact={density === "compact"}
+                  onSelectRow={onSelectRow}
+                  onOpen={onOpen}
+                />
               </div>
             );
           })}
         </div>
       </div>
-    </>
+    </ObjectListContextMenu>
   );
 }
 

@@ -6,7 +6,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { cn } from "@/lib/utils";
 import { fileAppearance } from "@/lib/file-types";
 import { entryDisplayName, entryId } from "@/lib/object-path";
-import { ObjectContextMenu } from "@/components/object-context-menu";
+import { ObjectListContextMenu } from "@/components/object-context-menu";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useIsSelected } from "@/stores/selection";
 import { usePrefsStore } from "@/stores/prefs";
@@ -118,14 +118,15 @@ export function ObjectGrid({
   }, [items, rowCount, hasNextPage, isFetchingNextPage, onLoadMore]);
 
   return (
-    <div ref={parentRef} className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
-      <div
-        style={{
-          height: `${rowVirtualizer.getTotalSize()}px`,
-          width: "100%",
-          position: "relative",
-        }}
-      >
+    <ObjectListContextMenu visible={visible} onAction={onContextAction}>
+      <div ref={parentRef} className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+        <div
+          style={{
+            height: `${rowVirtualizer.getTotalSize()}px`,
+            width: "100%",
+            position: "relative",
+          }}
+        >
         {items.map((virtualRow) => {
           const isLoaderRow = virtualRow.index >= rowCount;
           const wrapperStyle: React.CSSProperties = {
@@ -159,26 +160,22 @@ export function ObjectGrid({
                 }}
               >
                 {rowSlice.map((entry) => (
-                  <ObjectContextMenu
+                  <ObjectTile
                     key={entryId(entry)}
                     entry={entry}
-                    onAction={onContextAction}
-                  >
-                    <ObjectTile
-                      entry={entry}
-                      currentPrefix={currentPrefix}
-                      compact={compact}
-                      onSelectRow={onSelectRow}
-                      onOpen={onOpen}
-                    />
-                  </ObjectContextMenu>
+                    currentPrefix={currentPrefix}
+                    compact={compact}
+                    onSelectRow={onSelectRow}
+                    onOpen={onOpen}
+                  />
                 ))}
               </div>
             </div>
           );
         })}
+        </div>
       </div>
-    </div>
+    </ObjectListContextMenu>
   );
 }
 
@@ -240,6 +237,7 @@ function ObjectTileImpl({
   return (
     <div
       onClick={handleClick}
+      data-entry-id={id}
       className={cn(
         "group border-border bg-card/40 hover:border-surface-1 hover:bg-muted/50 relative flex h-full cursor-pointer flex-col items-center rounded-lg border text-center select-none",
         compact ? "gap-1.5 p-2" : "gap-2 p-3",

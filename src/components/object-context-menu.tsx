@@ -19,34 +19,82 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { useSelectionStore } from "@/stores/selection";
+import { entryId } from "@/lib/object-path";
 import type { ContextAction } from "@/components/object-list";
 import type { S3Entry } from "@server/types";
 
 /**
- * Right-click menu around a single object row. The wrapper renders no
- * selection-aware UI itself — count is read inside `MenuItems`, which only
- * mounts when the menu is actually open. That keeps the wrapper free of any
- * selection subscription so it doesn't re-render on every click, which was
- * the dominant cost across ~30 visible rows.
+ * One Radix ContextMenu for an entire list/grid, instead of one per row.
+ *
+ * Why: the previous design wrapped every visible row in its own ContextMenu
+ * Root. With ~30 virtualized rows on screen, that's ~30 simultaneous Radix
+ * Root instances, each running their own pointer / focus / collection
+ * bookkeeping. Hovering inside the open menu visibly lagged because every
+ * pointer move rippled through every instance.
+ *
+ * How: each row stamps `data-entry-id={entryId(entry)}` on its root. The
+ * single onContextMenu handler walks up from `e.target` to find the row that
+ * was right-clicked, records it as `activeEntry`, and lets Radix open at the
+ * cursor. Right-clicking empty space (no row ancestor) preventDefaults the
+ * event — Radix Slot's composeEventHandlers skips its own handler when the
+ * child already preventDefaulted, so the menu stays closed.
  */
-export function ObjectContextMenu({
-  entry,
+export function ObjectListContextMenu({
+  visible,
   onAction,
   children,
 }: {
-  entry: S3Entry;
-  /**
-   * Receives `entry` so the parent's handler can stay stable (a per-row inline
-   * `(a) => onAction(entry, a)` would allocate every render and burn the memo).
-   */
+  /** All entries currently rendered in the list/grid. Used to map a clicked
+   *  row's data-entry-id back to its S3Entry. */
+  visible: S3Entry[];
   onAction: (entry: S3Entry, action: ContextAction) => void;
   children: React.ReactNode;
 }) {
+  const [activeEntry, setActiveEntry] = React.useState<S3Entry | null>(null);
+  // Read latest `visible` without re-binding the handler on every render —
+  // the list updates often (sort, filter, scroll) and Radix's Slot composes
+  // a fresh handler whenever this prop changes, churning the trigger.
+  const visibleRef = React.useRef(visible);
+  visibleRef.current = visible;
+
+  const handleContextMenu = React.useCallback((e: React.MouseEvent) => {
+    const el = (e.target as Element | null)?.closest("[data-entry-id]");
+    if (!el) {
+      // Right-click on empty space / header / loader row — suppress both
+      // our menu and the browser's native one for predictability.
+      e.preventDefault();
+      return;
+    }
+    const id = el.getAttribute("data-entry-id");
+    const found = id
+      ? visibleRef.current.find((v) => entryId(v) === id)
+      : null;
+    if (!found) {
+      e.preventDefault();
+      return;
+    }
+    setActiveEntry(found);
+    // Don't preventDefault — let Radix's onContextMenu (composed by Slot)
+    // run next and open the menu at the cursor.
+  }, []);
+
   return (
     <ContextMenu>
-      <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
+      <ContextMenuTrigger asChild>
+        <div
+          // `display: contents` keeps the wrapper invisible to layout so the
+          // children's flex/grid math is unchanged, but the div is still in
+          // the DOM tree and receives the contextmenu event.
+          style={{ display: "contents" }}
+          onContextMenu={handleContextMenu}
+        >
+          {children}
+        </div>
+      </ContextMenuTrigger>
       <ContextMenuContent className="font-mono text-xs">
-        <MenuItems entry={entry} onAction={onAction} />
+        {activeEntry ? (
+          <MenuItems entry={activeEntry} onAction={onAction} />
+        ) : null}
       </ContextMenuContent>
     </ContextMenu>
   );
@@ -121,7 +169,7 @@ function MenuItems({
       </ContextMenuItem>
       <ContextMenuItem onSelect={() => onAction(entry, "copy-to")}>
         <Copy className="text-accent-mauve" />
-        Copy to...
+        Copy to
       </ContextMenuItem>
       <ContextMenuSeparator />
       <ContextMenuItem

@@ -29,8 +29,11 @@ function ContextMenuContent({
         data-slot="context-menu-content"
         className={cn(
           "bg-popover text-popover-foreground z-50 min-w-[10rem] overflow-hidden rounded-md border p-1 shadow-md",
-          "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95",
-          "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95",
+          // Duration explicit — default tw-animate-css timing felt sluggish
+          // for a right-click menu. 80ms reads as instant but still smooths
+          // the zoom-in so it doesn't pop in jarringly.
+          "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=closed]:duration-75",
+          "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=open]:duration-75",
           className
         )}
         {...props}
