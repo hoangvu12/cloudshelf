@@ -228,9 +228,9 @@ function ObjectTileImpl({
 
   const handleClick = (e: React.MouseEvent) => {
     const mods = { shift: e.shiftKey, meta: e.metaKey || e.ctrlKey };
-    // Same shape as ObjectRow: folder + plain click navigates; everything
-    // else routes through selection.
-    if (isFolder && !mods.shift && !mods.meta) {
+    // Same shape as ObjectRow: folder plain-click navigates, file plain-click
+    // opens preview, any modifier routes through selection.
+    if (!mods.shift && !mods.meta) {
       onOpen(entry);
       return;
     }

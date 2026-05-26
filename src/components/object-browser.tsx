@@ -188,12 +188,26 @@ export function ObjectBrowser({
     [navigate, bucket]
   );
 
+  // Plain click on a row goes through this. Folders navigate, files open the
+  // preview drawer. The context menu's "Open in new tab" uses
+  // handleOpenInNewTab instead so it can still bypass the drawer.
   const handleOpen = React.useCallback(
-    async (entry: S3Entry) => {
+    (entry: S3Entry) => {
       if (entry.type === "prefix") {
         navigateToPrefix(entry.prefix);
         return;
       }
+      const siblings = visibleRef.current
+        .filter((e): e is S3ObjectEntry => e.type === "object")
+        .map((e) => e.key);
+      openPreview(entry.key, siblings);
+    },
+    [navigateToPrefix, openPreview]
+  );
+
+  const handleOpenInNewTab = React.useCallback(
+    async (entry: S3Entry) => {
+      if (entry.type !== "object") return;
       try {
         const { url } = await fetchDownloadUrl(connectionId, bucket, entry.key);
         window.open(url, "_blank", "noopener,noreferrer");
@@ -201,7 +215,7 @@ export function ObjectBrowser({
         toast.error(e instanceof Error ? e.message : "Couldn't open file");
       }
     },
-    [navigateToPrefix, connectionId, bucket]
+    [connectionId, bucket]
   );
 
   // ─── Selection (modifier-aware) ─────────────────────────────────────────
@@ -541,7 +555,7 @@ export function ObjectBrowser({
           else h.downloadEntry(entry);
           return;
         case "open-new-tab":
-          handleOpen(entry);
+          handleOpenInNewTab(entry);
           return;
         case "copy-link":
           h.handleCopyLink(entry);
@@ -564,7 +578,7 @@ export function ObjectBrowser({
           return;
       }
     },
-    [handleOpen, setManySelected, openPreview]
+    [handleOpenInNewTab, setManySelected, openPreview]
   );
 
   // ─── Toolbar action delegates ───────────────────────────────────────────

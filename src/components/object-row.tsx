@@ -28,13 +28,12 @@ export interface RowClickModifiers {
  *
  * Interaction:
  *   - Plain click on folder → navigate into it
- *   - Plain click on file → additive toggle (same as the checkbox); the
- *     existing selection is preserved, not replaced
- *   - Cmd/Ctrl + click → same as plain click (additive toggle)
+ *   - Plain click on file → open the preview drawer
+ *   - Cmd/Ctrl + click → additive toggle (works on file or folder)
  *   - Shift + click → extend selection from anchor to here (replacing the range)
  *   - Checkbox click → additive toggle
  *
- * To open a file, use the right-click menu (Open in new tab / Download).
+ * To download or open a file in a new tab, use the right-click menu.
  */
 function ObjectRowImpl({
   entry,
@@ -63,9 +62,10 @@ function ObjectRowImpl({
 
   const handleRowClick = (e: React.MouseEvent) => {
     const mods = { shift: e.shiftKey, meta: e.metaKey || e.ctrlKey };
-    // A folder with no modifiers navigates; anything else (folder or file)
-    // routes through selection so range / additive selection still works.
-    if (isFolder && !mods.shift && !mods.meta) {
+    // No modifiers → folders navigate, files open the preview drawer. Any
+    // modifier (shift / cmd / ctrl) routes through selection so the range
+    // and additive-toggle keystrokes still work on both kinds of entry.
+    if (!mods.shift && !mods.meta) {
       onOpen(entry);
       return;
     }
