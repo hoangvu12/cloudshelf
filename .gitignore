@@ -6,6 +6,9 @@ dist/
 # Vite
 .vite/
 
+# TypeScript incremental build cache (per-machine, not for commits)
+*.tsbuildinfo
+
 # IDE
 .vscode/
 .idea/
