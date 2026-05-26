@@ -7,9 +7,10 @@ S3 endpoint (MinIO, R2, AWS, [telegram-s3](https://github.com/hoangvu12/telegram
 
 Live demo: <https://files.nguyenvu.dev>
 
-> ⚠️ **Single-user, no auth.** Credentials sit in plaintext SQLite. Run it
-> on a LAN, on `localhost`, or behind your own auth proxy. Don't expose
-> the raw service to the public internet.
+> ⚠️ **Single-user.** One username + password (from env vars), signed-cookie
+> session. S3 credentials sit in plaintext SQLite. Safe to expose behind
+> HTTPS, but a reverse-proxy auth layer (Cloudflare Access, Authelia, …)
+> on top is still a good idea for anything public-facing.
 
 ## What it does
 
@@ -41,12 +42,13 @@ Live demo: <https://files.nguyenvu.dev>
 
 ```bash
 bun install
-bun run dev          # API :3001 + Vite :5173 (concurrently)
+cp .env.example .env       # then edit CLOUDSHELF_USERNAME / PASSWORD
+bun run dev                # API :3001 + Vite :5173 (concurrently)
 ```
 
-Open <http://localhost:5173>, click **Add connection**, point it at any
-S3-compatible endpoint. CloudShelf probes the credentials before
-saving.
+Open <http://localhost:5173>, sign in with the credentials from `.env`,
+then click **Add connection** and point it at any S3-compatible
+endpoint. CloudShelf probes the credentials before saving.
 
 ### Other scripts
 
@@ -63,10 +65,17 @@ bun run start        # NODE_ENV=production bun server/index.ts
 
 | Var | Default | What it does |
 |---|---|---|
+| `CLOUDSHELF_USERNAME` | — | **Required.** Login username. |
+| `CLOUDSHELF_PASSWORD` | — | **Required.** Login password (compared timing-safely). |
 | `PORT` | `3001` | Server port (API + SPA in prod) |
 | `CLOUDSHELF_DB` | `./data/cloudshelf.db` | SQLite file location — mount a volume here in prod |
 | `CLOUDSHELF_API` | `http://localhost:3001` | Vite dev proxy target |
 | `NODE_ENV` | — | Set to `production` to enable static SPA serving |
+
+The server refuses to start if `CLOUDSHELF_USERNAME` or `CLOUDSHELF_PASSWORD`
+is missing. The session HMAC secret is auto-generated on first run and
+persisted in the SQLite `meta` table, so sessions survive restarts without
+a separate env var.
 
 ## Deploy
 
@@ -77,27 +86,34 @@ docker build -t cloudshelf .
 docker run -d \
   --name cloudshelf \
   -p 3001:3001 \
+  -e CLOUDSHELF_USERNAME=admin \
+  -e CLOUDSHELF_PASSWORD=change-me \
   -v cloudshelf-data:/app/data \
   cloudshelf
 ```
 
-Mount `/app/data` to a volume — that's where `cloudshelf.db` lives.
+Mount `/app/data` to a volume — that's where `cloudshelf.db` lives. The
+container exits immediately if `CLOUDSHELF_USERNAME` / `CLOUDSHELF_PASSWORD`
+are missing.
 
 ### Easypanel
 
 1. Create an **App** service from this GitHub repo.
 2. Build type: **Dockerfile**.
-3. Add a **volume mount**: name `cloudshelf-data`, path `/app/data`.
-4. Add a **domain** pointing at internal port `3001` (HTTPS on).
+3. Add **environment variables**: `CLOUDSHELF_USERNAME` and
+   `CLOUDSHELF_PASSWORD`.
+4. Add a **volume mount**: name `cloudshelf-data`, path `/app/data`.
+5. Add a **domain** pointing at internal port `3001` (HTTPS on).
 
 The included `Dockerfile` is the multi-stage build Easypanel will pick
 up automatically.
 
 ### Behind a reverse proxy
 
-Front it with Caddy / nginx / Cloudflare / Traefik for TLS and (if you
-want it on the public internet) an auth layer like Cloudflare Access,
-basic auth, or Authelia.
+Front it with Caddy / nginx / Cloudflare / Traefik for TLS. The built-in
+login is enough for one user; layering Cloudflare Access / Authelia /
+basic auth on top adds MFA, SSO, and shifts brute-force protection off
+the app — worth it for anything public-facing.
 
 ## Connecting to telegram-s3
 
@@ -122,15 +138,20 @@ server/                     # Bun + Hono API
 ├── index.ts                # entry; /api/* + serves /dist in prod
 ├── db.ts                   # bun:sqlite + schema + queries
 ├── types.ts                # shared with frontend via @server/*
-├── lib/s3.ts               # createS3Client + probeConnection
-└── routes/connections.ts
+├── lib/
+│   ├── auth.ts             # session cookie, password verify, middleware
+│   └── s3.ts               # createS3Client + probeConnection
+└── routes/
+    ├── auth.ts             # /api/auth/login, /logout, /me
+    └── connections.ts
 
 src/                        # Vite SPA — browser only, never imports AWS SDK
 ├── main.tsx
 ├── styles.css              # Tailwind v4 + oklch theme tokens
 ├── routes/                 # TanStack Router (file-based)
-│   ├── __root.tsx
+│   ├── __root.tsx          # auth gate lives here
 │   ├── index.tsx
+│   ├── login.tsx
 │   ├── setup.tsx
 │   ├── settings.tsx
 │   └── buckets.$bucketName.$.tsx
@@ -174,12 +195,16 @@ the repo root, move its contents into `src/` and delete it.
 
 ## Security notes
 
-- **No auth.** Don't expose to the public internet without a layer in
-  front (Cloudflare Access, basic auth, Authelia, …).
-- Credentials are plaintext in `data/cloudshelf.db` — keep that file
-  out of backups/syncs you don't trust. `data/` is gitignored.
+- **Login is enforced.** Username/password from env vars, signed
+  HttpOnly cookie, 30-day session, timing-safe compare. Server refuses
+  to start without `CLOUDSHELF_USERNAME` and `CLOUDSHELF_PASSWORD`.
+- **S3 credentials are plaintext** in `data/cloudshelf.db` — keep that
+  file out of backups/syncs you don't trust. `data/` is gitignored.
 - The browser never sees S3 credentials. Presigned URLs are minted with
   short TTLs and scoped to a single operation.
+- Cookies are marked `Secure` when accessed over HTTPS (detected per
+  request via the scheme or `X-Forwarded-Proto`), so put it behind TLS
+  if you expose it beyond `localhost`.
 
 ## License
 

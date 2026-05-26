@@ -69,6 +69,7 @@ export { default as Maximize2 } from "@material-symbols/svg-400/outlined/open_in
 export { default as Pause } from "@material-symbols/svg-400/outlined/pause-fill.svg?react";
 export { default as Play } from "@material-symbols/svg-400/outlined/play_arrow-fill.svg?react";
 export { default as Lock } from "@material-symbols/svg-400/outlined/lock-fill.svg?react";
+export { default as LogOut } from "@material-symbols/svg-400/outlined/logout-fill.svg?react";
 export { default as Eye } from "@material-symbols/svg-400/outlined/visibility-fill.svg?react";
 export { default as EyeOff } from "@material-symbols/svg-400/outlined/visibility_off-fill.svg?react";
 export { default as CheckSquare } from "@material-symbols/svg-400/outlined/check_box-fill.svg?react";

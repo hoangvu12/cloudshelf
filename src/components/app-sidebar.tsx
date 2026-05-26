@@ -1,10 +1,11 @@
 import * as React from "react";
-import { Link, useLocation } from "@tanstack/react-router";
+import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import {
   ChevronsUpDown,
   Clock,
   Home,
   Link as LinkIcon,
+  LogOut,
   Plus,
   Server,
   Settings,
@@ -20,6 +21,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useLogout, useMe } from "@/lib/api/auth";
 import type { S3Connection } from "@server/types";
 
 type AccentColor = "blue" | "pink" | "green" | "mauve" | "subtext";
@@ -117,22 +119,70 @@ export function AppSidebar({
         </div>
       </div>
 
-      <div className="border-ctp-surface0 border-t p-4">
-        <div className="mb-2 flex justify-between font-mono text-[10px]">
-          <span className="text-ctp-subtext">
-            {formatBytes(storageUsedBytes)}
-            {storageTotalBytes ? ` / ${formatBytes(storageTotalBytes)}` : ""}
-          </span>
-          <span className="text-ctp-text">{pct}%</span>
-        </div>
-        <div className="bg-ctp-surface0 h-1 w-full overflow-hidden rounded-full">
-          <div
-            className="from-ctp-blue to-ctp-mauve h-1 rounded-full bg-gradient-to-r transition-[width] duration-300 ease-linear"
-            style={{ width: `${pct}%` }}
-          />
-        </div>
-      </div>
+      <SignedInFooter
+        storageUsedBytes={storageUsedBytes}
+        storageTotalBytes={storageTotalBytes}
+        pct={pct}
+      />
     </aside>
+  );
+}
+
+function SignedInFooter({
+  storageUsedBytes,
+  storageTotalBytes,
+  pct,
+}: {
+  storageUsedBytes: number;
+  storageTotalBytes?: number;
+  pct: number;
+}) {
+  const me = useMe();
+  const logout = useLogout();
+  const navigate = useNavigate();
+
+  const onSignOut = () => {
+    logout.mutate(undefined, {
+      onSettled: () => navigate({ to: "/login" }),
+    });
+  };
+
+  return (
+    <div className="border-ctp-surface0 border-t p-4">
+      {me.data && (
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <span
+            className="text-ctp-subtext truncate text-xs"
+            title={me.data.user}
+          >
+            Signed in as{" "}
+            <span className="text-ctp-text font-medium">{me.data.user}</span>
+          </span>
+          <button
+            type="button"
+            onClick={onSignOut}
+            disabled={logout.isPending}
+            title="Sign out"
+            className="text-ctp-subtext hover:bg-ctp-surface0 hover:text-ctp-red rounded p-1 transition-colors disabled:opacity-50"
+          >
+            <LogOut className="size-3.5" />
+          </button>
+        </div>
+      )}
+      <div className="mb-2 flex justify-between font-mono text-[10px]">
+        <span className="text-ctp-subtext">
+          {formatBytes(storageUsedBytes)}
+          {storageTotalBytes ? ` / ${formatBytes(storageTotalBytes)}` : ""}
+        </span>
+        <span className="text-ctp-text">{pct}%</span>
+      </div>
+      <div className="bg-ctp-surface0 h-1 w-full overflow-hidden rounded-full">
+        <div
+          className="from-ctp-blue to-ctp-mauve h-1 rounded-full bg-gradient-to-r transition-[width] duration-300 ease-linear"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
   );
 }
 

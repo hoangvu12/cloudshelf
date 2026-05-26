@@ -30,8 +30,32 @@ export function getDb(): Database {
       updated_at TEXT NOT NULL
     );
   `);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS meta (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+  `);
 
   return db;
+}
+
+// ─── Meta key/value (session secret, etc.) ──────────────────────────────────
+
+export function getMeta(key: string): string | null {
+  const row = getDb()
+    .query("SELECT value FROM meta WHERE key = ?")
+    .get(key) as { value: string } | null;
+  return row?.value ?? null;
+}
+
+export function setMeta(key: string, value: string): void {
+  getDb()
+    .query(
+      "INSERT INTO meta (key, value) VALUES (?, ?) " +
+        "ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+    )
+    .run(key, value);
 }
 
 interface ConnectionRow {

@@ -16,16 +16,28 @@
  *     does; bucket-level CORS for AWS/R2/MinIO is a one-time setup).
  *   - Credentials live in ./data/cloudshelf.db (SQLite). Plaintext is fine
  *     because this app is single-user, local-use only.
+ *   - Single-user auth: CLOUDSHELF_USERNAME/PASSWORD env vars + signed
+ *     cookie. See server/lib/auth.ts.
  */
 
 import { Hono } from "hono";
 import { logger } from "hono/logger";
 import { serveStatic } from "hono/bun";
 import { connectionsRoute } from "./routes/connections.ts";
+import { authRoute } from "./routes/auth.ts";
+import { requireSession } from "./lib/auth.ts";
 import { getDb } from "./db.ts";
 
 const PORT = Number(process.env.PORT ?? 3001);
 const IS_PROD = process.env.NODE_ENV === "production";
+
+if (!process.env.CLOUDSHELF_USERNAME || !process.env.CLOUDSHELF_PASSWORD) {
+  console.error(
+    "\n[CloudShelf] CLOUDSHELF_USERNAME and CLOUDSHELF_PASSWORD must be set " +
+      "(via .env or the environment) before the server can start.\n"
+  );
+  process.exit(1);
+}
 
 getDb();
 
@@ -34,6 +46,12 @@ const app = new Hono();
 app.use("*", logger());
 
 app.get("/api/health", (c) => c.json({ ok: true }));
+
+app.route("/api/auth", authRoute);
+
+// Gate everything else under /api/* behind the session cookie.
+// Registered after the public routes above so they don't pass through.
+app.use("/api/*", requireSession);
 
 app.route("/api/connections", connectionsRoute);
 
