@@ -231,7 +231,7 @@ export function ConfirmDeleteDialog({
           <DialogTitle>
             Delete {count} item{count === 1 ? "" : "s"}?
           </DialogTitle>
-          <DialogDescription className="font-sans">
+          <DialogDescription className="font-mono text-xs">
             This permanently removes the selected files from S3. Folders are
             removed as markers only — any objects already inside a folder won't
             be deleted by this action.

@@ -130,7 +130,7 @@ function LoginPage() {
           </form>
         </FormCard>
 
-        <p className="text-muted-foreground/70 mt-6 text-center font-sans text-xs">
+        <p className="text-muted-foreground/70 mt-6 text-center font-mono text-xs">
           Credentials come from{" "}
           <code className="text-muted-foreground font-mono">
             CLOUDSHELF_USERNAME

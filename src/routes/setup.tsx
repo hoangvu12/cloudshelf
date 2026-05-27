@@ -151,7 +151,7 @@ function SetupPage() {
               </strong>
               .
             </h1>
-            <div className="text-muted-foreground space-y-4 font-sans text-sm leading-relaxed">
+            <div className="text-muted-foreground space-y-4 font-mono text-sm leading-relaxed">
               <p>
                 Link your S3-compatible storage endpoint to start managing your
                 files.

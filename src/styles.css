@@ -589,6 +589,9 @@
   --normal-text: var(--popover-foreground);
   --normal-border: var(--border);
   --border-radius: var(--radius);
+  /* Sonner's runtime CSS hardcodes a sans stack on this selector; override
+     so toasts inherit the app's monospace voice. */
+  font-family: var(--font-mono);
 }
 
 [data-sonner-toast] {
