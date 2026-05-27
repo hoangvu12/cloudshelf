@@ -28,7 +28,7 @@ export type UploadStatus =
   | "failed"
   | "canceled";
 
-export type UploadStrategy = "single" | "multipart";
+export type UploadStrategy = "single" | "multipart" | "server-stream";
 
 /** Public shape the UI reads. Kept narrow on purpose — only the fields the
  *  panel and object-browser actually use. Internal Uppy state isn't leaked. */
@@ -71,6 +71,34 @@ interface UploadsState {
       target: { connectionId: string; bucket: string; prefix: string },
       items: UploadInputFile[]
     ) => string[];
+    /** Register a server-side upload (e.g. from-URL) that isn't backed by
+     *  Uppy. Returns the synthetic id used by `finishServerUpload`. The row
+     *  renders with `strategy: "server-stream"`, which the panel treats as
+     *  an indeterminate progress state — animated sweep bar, no byte counter,
+     *  no speed/ETA. Pass `size` and `contentType` when known (e.g. from a
+     *  preflight HEAD) so the row's meta line and icon match the real file. */
+    addServerUpload: (input: {
+      connectionId: string;
+      bucket: string;
+      prefix: string;
+      key: string;
+      fileName: string;
+      size?: number;
+      contentType?: string;
+    }) => string;
+    /** Patch a server-side upload row in place (e.g. fill in `size` and
+     *  `contentType` from a preflight HEAD that resolves after the row was
+     *  added). No-ops if the id isn't a known server upload. */
+    updateServerUpload: (
+      id: string,
+      patch: Partial<Pick<UploadItem, "size" | "contentType" | "fileName">>
+    ) => void;
+    /** Resolve a server-side upload as completed or failed. */
+    finishServerUpload: (
+      id: string,
+      status: "completed" | "failed",
+      error?: string
+    ) => void;
     retry: (id: string) => void;
     cancel: (id: string) => void;
     pause: (id: string) => void;
@@ -163,6 +191,13 @@ export function onUploadCompleted(listener: CompletionListener): () => void {
 // the UI can show the canceled row until clearFinished sweeps it away.
 const canceledSnapshots = new Map<string, UploadItem>();
 
+// ─── Server-side upload rows ───────────────────────────────────────────────
+// Virtual rows for uploads that don't go through Uppy (today: the from-URL
+// flow). They render alongside Uppy-backed rows so the user sees one unified
+// transfer list. clearFinished sweeps the completed/failed ones.
+const serverUploads = new Map<string, UploadItem>();
+let serverUploadSeq = 0;
+
 // ─── Thumbnail previews ────────────────────────────────────────────────────
 // data-URL previews keyed by file id, emitted by @uppy/thumbnail-generator.
 // Kept out-of-band from the items map so refresh() doesn't tear them down.
@@ -253,6 +288,15 @@ export const useUploadsStore = create<UploadsState>((set) => {
       if (!items[id]) {
         items[id] = snap;
         order.push(id);
+      }
+    }
+    // Server-side rows (e.g. from-URL) merge in the same way. Inserted at the
+    // top so an active from-URL row doesn't hide below already-finished Uppy
+    // rows after a clearFinished.
+    for (const [id, snap] of serverUploads) {
+      if (!items[id]) {
+        items[id] = snap;
+        order.unshift(id);
       }
     }
     set({ items, order });
@@ -367,6 +411,59 @@ export const useUploadsStore = create<UploadsState>((set) => {
         return ids;
       },
 
+      addServerUpload: ({
+        connectionId,
+        bucket,
+        prefix,
+        key,
+        fileName,
+        size,
+        contentType,
+      }) => {
+        const id = `server-upload-${++serverUploadSeq}`;
+        const item: UploadItem = {
+          id,
+          connectionId,
+          bucket,
+          key,
+          prefix,
+          fileName,
+          relativePath: fileName,
+          size: size ?? 0,
+          contentType: contentType || "application/octet-stream",
+          status: "uploading",
+          bytesUploaded: 0,
+          speedBps: 0,
+          etaSeconds: null,
+          // strategy: "server-stream" is the signal the panel uses to flip
+          // into indeterminate progress UI — we can't observe byte-level
+          // progress on this transport, so even a known size doesn't give us
+          // a bar to advance.
+          strategy: "server-stream",
+        };
+        serverUploads.set(id, item);
+        refresh();
+        return id;
+      },
+
+      updateServerUpload: (id, patch) => {
+        const prev = serverUploads.get(id);
+        if (!prev) return;
+        serverUploads.set(id, { ...prev, ...patch });
+        refresh();
+      },
+
+      finishServerUpload: (id, status, error) => {
+        const prev = serverUploads.get(id);
+        if (!prev) return;
+        serverUploads.set(id, {
+          ...prev,
+          status,
+          lastError: error,
+        });
+        refresh();
+      },
+
       retry: (id) => {
         canceledSnapshots.delete(id);
         void uppy.retryUpload(id);
@@ -410,6 +507,11 @@ export const useUploadsStore = create<UploadsState>((set) => {
         // Drop our canceled snapshots first, then ask Uppy to forget anything
         // it considers finished.
         canceledSnapshots.clear();
+        for (const [id, snap] of serverUploads) {
+          if (snap.status === "completed" || snap.status === "failed") {
+            serverUploads.delete(id);
+          }
+        }
         const files = uppy.getFiles() as UppyFile<AnyMeta, AnyMeta>[];
         for (const f of files) {
           if (f.progress.uploadComplete || f.error) {
@@ -424,6 +526,10 @@ export const useUploadsStore = create<UploadsState>((set) => {
       cancelAll: () => {
         uppy.cancelAll();
         canceledSnapshots.clear();
+        // Server-side uploads can't be canceled mid-flight (no abort plumbing
+        // yet); just clear the rows from the panel. In-flight requests will
+        // still complete server-side, but the user has dismissed them.
+        serverUploads.clear();
         samples.clear();
         previews.clear();
         refresh();

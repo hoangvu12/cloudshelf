@@ -649,6 +649,140 @@ const fromUrlSchema = z.object({
   key: z.string().trim().min(1),
 });
 
+const fromUrlPreflightSchema = z.object({
+  url: z.string().trim().url(),
+});
+
+/**
+ * Probe a URL for `size`, `contentType`, and a `suggestedFilename` so the
+ * client can populate the upload row with real numbers before kicking off the
+ * actual transfer. Tries HEAD first; falls back to a single-byte ranged GET
+ * when HEAD is blocked or returns no useful headers (some CDNs do this).
+ *
+ * Always returns 200 with whatever it could discover — an empty payload means
+ * the upstream gave nothing usable, which the client treats as
+ * "upload anyway, metadata unknown". Errors (private host, bad scheme,
+ * unreachable host) still 4xx/5xx so the user knows the upload won't work.
+ */
+connectionsRoute.post(
+  "/:id/buckets/:bucket/objects/from-url/preflight",
+  async (c) => {
+    const conn = getConnection(c.req.param("id"));
+    if (!conn) return c.json({ error: "Not found" }, 404);
+    const body = await c.req.json().catch(() => null);
+    const parsed = fromUrlPreflightSchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json(
+        { error: "Invalid payload", detail: parsed.error.message },
+        400
+      );
+    }
+    let url: URL;
+    try {
+      url = new URL(parsed.data.url);
+    } catch {
+      return c.json({ error: "Invalid URL" }, 400);
+    }
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return c.json({ error: "Only http(s) URLs are allowed" }, 400);
+    }
+    if (isPrivateHostname(url.hostname)) {
+      return c.json(
+        { error: "Refusing to fetch internal / private hostnames" },
+        400
+      );
+    }
+
+    const readHeaders = (
+      headers: Headers
+    ): {
+      size?: number;
+      contentType?: string;
+      suggestedFilename?: string;
+    } => {
+      const lenHeader = headers.get("content-length");
+      const size = lenHeader ? Number(lenHeader) : undefined;
+      const contentType = headers.get("content-type") ?? undefined;
+      // Pull filename out of Content-Disposition if upstream supplies one —
+      // beats the URL's last path segment for CDNs that serve via opaque IDs.
+      const cd = headers.get("content-disposition");
+      const suggestedFilename = cd ? parseContentDispositionFilename(cd) : undefined;
+      return {
+        size: size && Number.isFinite(size) ? size : undefined,
+        contentType: contentType ? contentType.split(";")[0]?.trim() : undefined,
+        suggestedFilename,
+      };
+    };
+
+    try {
+      const head = await fetch(url, {
+        method: "HEAD",
+        redirect: "follow",
+      });
+      if (head.ok) {
+        return c.json(readHeaders(head.headers));
+      }
+    } catch {
+      // Fall through to the GET fallback.
+    }
+    // Fallback: tiny ranged GET. Some hosts disallow HEAD entirely; a 1-byte
+    // request still surfaces Content-Length (via Content-Range) and Content-Type
+    // without pulling the whole body.
+    try {
+      const probe = await fetch(url, {
+        method: "GET",
+        headers: { Range: "bytes=0-0" },
+        redirect: "follow",
+      });
+      // Cancel the body — we only care about headers.
+      probe.body?.cancel().catch(() => {});
+      if (!probe.ok && probe.status !== 206) {
+        return c.json(
+          { error: `Upstream returned ${probe.status}`, detail: probe.statusText },
+          502
+        );
+      }
+      const info = readHeaders(probe.headers);
+      // Content-Range total trumps Content-Length when the server returned 206
+      // with only the partial slice we asked for.
+      const rangeHeader = probe.headers.get("content-range");
+      if (rangeHeader) {
+        const m = /\/(\d+)/.exec(rangeHeader);
+        if (m) {
+          const total = Number(m[1]);
+          if (Number.isFinite(total)) info.size = total;
+        }
+      }
+      return c.json(info);
+    } catch (err) {
+      return c.json(
+        {
+          error: "Couldn't probe URL",
+          detail: err instanceof Error ? err.message : String(err),
+        },
+        502
+      );
+    }
+  }
+);
+
+/** RFC 5987 / 6266: parse `filename=…` or `filename*=UTF-8''…`. Returns
+ *  undefined when the header isn't a sane attachment with a filename. */
+function parseContentDispositionFilename(cd: string): string | undefined {
+  // filename* (RFC 5987) takes precedence — it's the percent-encoded UTF-8 form.
+  const star = /filename\*\s*=\s*([^']*)'[^']*'([^;]+)/i.exec(cd);
+  if (star) {
+    try {
+      return decodeURIComponent(star[2]!.trim());
+    } catch {
+      /* fall through */
+    }
+  }
+  const plain = /filename\s*=\s*"?([^";]+)"?/i.exec(cd);
+  if (plain) return plain[1]!.trim();
+  return undefined;
+}
+
 connectionsRoute.post(
   "/:id/buckets/:bucket/objects/from-url",
   async (c) => {

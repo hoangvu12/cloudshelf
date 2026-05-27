@@ -13,15 +13,18 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Link as LinkIcon } from "@/lib/icons";
 import { normalizePrefix } from "@/lib/object-path";
-import { useUploadFromUrl } from "@/lib/api/upload-from-url";
+import { preflightFromUrl, useUploadFromUrl } from "@/lib/api/upload-from-url";
+import { useUploadsStore } from "@/stores/uploads";
 
 /**
  * Prompt for a public URL + destination filename, then fire the server-side
  * "from URL" route. Bytes never touch the browser — the server streams the
- * upstream response straight into S3 via @aws-sdk/lib-storage. Progress is
- * communicated via a sonner toast (loading → success/failure) rather than a
- * live byte counter because the route is a single HTTP request that returns
- * only when the multipart upload is fully done.
+ * upstream response straight into S3 via @aws-sdk/lib-storage.
+ *
+ * Progress lives in the upload panel as a virtual row (`addServerUpload`):
+ * since the server reports nothing back until the POST resolves, the row
+ * renders with size=0 and the panel shows it with an indeterminate sweep
+ * bar. On resolution we flip it to completed/failed.
  *
  * Filename defaults to the URL's last path segment (decoded, query stripped).
  * The user can override; we always join it with the active prefix to build
@@ -64,6 +67,13 @@ export function UploadFromUrlDialog({
   }, [url, filenameDirty]);
 
   const upload = useUploadFromUrl(connectionId, bucket);
+  const addServerUpload = useUploadsStore((s) => s.actions.addServerUpload);
+  const updateServerUpload = useUploadsStore(
+    (s) => s.actions.updateServerUpload
+  );
+  const finishServerUpload = useUploadsStore(
+    (s) => s.actions.finishServerUpload
+  );
 
   const trimmedFilename = filename.trim();
   const trimmedUrl = url.trim();
@@ -71,30 +81,46 @@ export function UploadFromUrlDialog({
   // validates the URL scheme + hostname properly. Local checks here are just
   // about not firing an obviously-broken request.
   const canSubmit =
-    !upload.isPending &&
-    trimmedFilename.length > 0 &&
-    /^https?:\/\//i.test(trimmedUrl);
+    trimmedFilename.length > 0 && /^https?:\/\//i.test(trimmedUrl);
 
   const handleSubmit = () => {
     if (!canSubmit) return;
     const key = normalizePrefix(prefix) + trimmedFilename;
-    const toastId = toast.loading(`Fetching ${trimmedFilename}…`, {
-      description: trimmedUrl,
+    // Close the dialog immediately — the upload panel takes over the
+    // "still working" UI. The mutation continues independently.
+    const rowId = addServerUpload({
+      connectionId,
+      bucket,
+      prefix,
+      key,
+      fileName: trimmedFilename,
     });
+    onOpenChange(false);
+
+    // Preflight (HEAD against the upstream URL) runs in parallel — purely
+    // cosmetic, fills in real size + contentType on the panel row so it
+    // doesn't sit at "0 B · application/octet-stream" the whole time.
+    // Failure is non-fatal; the upload route runs the same probe itself.
+    preflightFromUrl(connectionId, bucket, trimmedUrl)
+      .then((meta) => {
+        updateServerUpload(rowId, {
+          size: meta.size,
+          contentType: meta.contentType,
+        });
+      })
+      .catch(() => {
+        /* swallow — the actual upload below is the source of truth. */
+      });
+
     upload.mutate(
       { url: trimmedUrl, key },
       {
         onSuccess: () => {
-          toast.success("Uploaded from URL", {
-            id: toastId,
-            description: key,
-          });
-          onOpenChange(false);
+          finishServerUpload(rowId, "completed");
         },
         onError: (e) => {
-          toast.error(e.message ?? "Upload from URL failed", {
-            id: toastId,
-          });
+          finishServerUpload(rowId, "failed", e.message);
+          toast.error(e.message ?? "Upload from URL failed");
         },
       }
     );
@@ -163,12 +189,11 @@ export function UploadFromUrlDialog({
               type="button"
               variant="outline"
               onClick={() => onOpenChange(false)}
-              disabled={upload.isPending}
             >
               Cancel
             </Button>
             <Button type="submit" disabled={!canSubmit}>
-              {upload.isPending ? "Uploading…" : "Upload"}
+              Upload
             </Button>
           </DialogFooter>
         </form>

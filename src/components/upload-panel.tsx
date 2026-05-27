@@ -5,10 +5,8 @@ import {
   ArrowUp,
   CheckCircle2,
   CheckIcon,
-  ChevronDown,
   CloudUpload,
   CornerDownRight,
-  Database,
   Link as LinkIcon,
   Maximize2,
   Minus,
@@ -25,21 +23,12 @@ import { fileAppearance } from "@/lib/file-types";
 import { trimTrailingSlash } from "@/lib/object-path";
 import { fetchDownloadUrl } from "@/lib/api/objects";
 import { useCopied } from "@/lib/use-copied";
+import { Progress } from "@/components/ui/progress";
 import {
   useUploadItem,
   useUploadsStore,
   type UploadItem,
 } from "@/stores/uploads";
-import { usePrefsStore } from "@/stores/prefs";
-import { useUploadSessionStore } from "@/stores/upload-session";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 
 /**
  * Floating bottom-right upload panel. Lives once at the app root so uploads
@@ -156,8 +145,6 @@ export function UploadPanel() {
           onClose={actions.cancelAll}
         />
 
-        <Toolbar />
-
         <div className="bg-background/50 flex max-h-[60vh] flex-col overflow-y-auto">
           {data.order.map((id) => (
             <UploadRow key={id} id={id} />
@@ -233,125 +220,6 @@ function Header({
         </div>
       </div>
     </div>
-  );
-}
-
-// ─── Toolbar ────────────────────────────────────────────────────────────────
-//
-// Thin secondary row under the Header for session-scoped upload knobs. Today
-// it hosts only the storage-class picker (Phase 9); future per-session
-// overrides (e.g. encryption mode, content-disposition default) slot in here
-// rather than crowding the title row.
-
-/** Canonical AWS storage classes plus the implicit "Default" sentinel. The
- *  list is intentionally hard-coded so the picker stays predictable across
- *  backends — values forwarded to S3-compatible endpoints that don't
- *  recognize them are silently treated as STANDARD by most servers, which
- *  satisfies the Phase 9 "graceful no-op" requirement. */
-const STORAGE_CLASS_OPTIONS: { value: string; label: string; hint?: string }[] =
-  [
-    { value: "STANDARD", label: "STANDARD", hint: "Default hot storage" },
-    {
-      value: "STANDARD_IA",
-      label: "STANDARD_IA",
-      hint: "Infrequent access",
-    },
-    {
-      value: "INTELLIGENT_TIERING",
-      label: "INTELLIGENT_TIERING",
-      hint: "Auto-tiering",
-    },
-    { value: "ONEZONE_IA", label: "ONEZONE_IA", hint: "Single-AZ IA" },
-    { value: "GLACIER_IR", label: "GLACIER_IR", hint: "Instant retrieval" },
-    { value: "GLACIER", label: "GLACIER", hint: "Archive (minutes-hours)" },
-    {
-      value: "DEEP_ARCHIVE",
-      label: "DEEP_ARCHIVE",
-      hint: "Archive (hours)",
-    },
-    {
-      value: "REDUCED_REDUNDANCY",
-      label: "REDUCED_REDUNDANCY",
-      hint: "Legacy, AWS-only",
-    },
-  ];
-
-function Toolbar() {
-  return (
-    <div className="bg-card/60 border-surface-1 flex h-9 shrink-0 items-center justify-between gap-2 border-b px-4">
-      <StorageClassPicker />
-    </div>
-  );
-}
-
-/** Per-session storage-class override. Reading order is:
- *    session override (this picker) → persisted default pref → undefined.
- *  Selecting "Default" clears the session override only; the persisted pref
- *  is left alone. The toolbar surface intentionally uses muted chrome so the
- *  panel's transfer-status reading stays the focal point. */
-function StorageClassPicker() {
-  const sessionClass = useUploadSessionStore((s) => s.storageClass);
-  const setSessionClass = useUploadSessionStore((s) => s.setStorageClass);
-  const defaultClass = usePrefsStore((s) => s.defaultStorageClass);
-  // Effective class is what `addFiles` will actually lock in for new uploads.
-  const effective = sessionClass ?? defaultClass;
-  const label = effective ?? "Default";
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          className="text-muted-foreground hover:text-foreground hover:bg-surface-1 focus-visible:ring-primary-text/40 inline-flex items-center gap-1.5 rounded px-1.5 py-0.5 font-mono text-[10px] tracking-wider uppercase transition-colors focus:outline-none focus-visible:ring-2"
-          title="Storage class for new uploads"
-        >
-          <Database className="size-3" />
-          <span>Storage:</span>
-          <span className="text-foreground normal-case">{label}</span>
-          <ChevronDown className="size-3" />
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-64">
-        <DropdownMenuLabel className="text-muted-foreground text-[10px] font-bold tracking-wider uppercase">
-          Storage class
-        </DropdownMenuLabel>
-        <DropdownMenuItem
-          onSelect={() => setSessionClass(undefined)}
-          className="flex items-start gap-2"
-        >
-          <div className="flex w-4 shrink-0 items-center justify-center pt-0.5">
-            {effective === undefined && <CheckIcon className="size-3.5" />}
-          </div>
-          <div className="flex min-w-0 flex-1 flex-col">
-            <span className="text-foreground text-xs">Default</span>
-            <span className="text-muted-foreground text-[10px]">
-              Let the backend pick
-            </span>
-          </div>
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        {STORAGE_CLASS_OPTIONS.map((opt) => (
-          <DropdownMenuItem
-            key={opt.value}
-            onSelect={() => setSessionClass(opt.value)}
-            className="flex items-start gap-2"
-          >
-            <div className="flex w-4 shrink-0 items-center justify-center pt-0.5">
-              {effective === opt.value && <CheckIcon className="size-3.5" />}
-            </div>
-            <div className="flex min-w-0 flex-1 flex-col">
-              <span className="text-foreground font-mono text-[11px]">
-                {opt.label}
-              </span>
-              {opt.hint && (
-                <span className="text-muted-foreground text-[10px]">
-                  {opt.hint}
-                </span>
-              )}
-            </div>
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
   );
 }
 
@@ -563,7 +431,15 @@ function UploadingRow({
   onCancel: () => void;
   onPause: () => void;
 }) {
-  const pct = item.size > 0 ? (item.bytesUploaded / item.size) * 100 : 0;
+  // server-stream rows (from-URL flow) don't surface byte-level progress —
+  // the panel falls back to an indeterminate sweep bar and drops the
+  // byte counter / speed / ETA. Size + content-type still ride on the row
+  // for the meta line and icon.
+  const indeterminate = item.strategy === "server-stream";
+  const pct =
+    indeterminate || item.size === 0
+      ? 0
+      : (item.bytesUploaded / item.size) * 100;
   // Pause is only meaningful for multipart — single-PUT can't resume.
   const canPause = item.strategy === "multipart";
   return (
@@ -601,38 +477,47 @@ function UploadingRow({
         </div>
       </div>
       <div>
-        <div className="bg-muted mb-2 h-1.5 w-full overflow-hidden rounded-full">
-          <div
-            className="bg-primary-text relative h-full rounded-full shadow-[0_0_10px_color-mix(in_oklab,_var(--primary-text)_40%,_transparent)] transition-[width] duration-200 ease-linear"
-            style={{ width: `${pct}%` }}
-          />
-        </div>
+        <Progress
+          value={indeterminate ? null : pct}
+          className="mb-2 h-1.5"
+        />
         <div className="flex items-center justify-between font-mono text-[10px]">
-          <div className="text-primary-text font-bold">
-            {pct.toFixed(0)}%
-            <span className="text-muted-foreground ml-1 font-normal">
-              · {formatBytes(item.bytesUploaded)} of {formatBytes(item.size)}
-            </span>
-          </div>
-          <div className="text-muted-foreground">
-            {item.speedBps > 0 ? (
-              <>
-                {formatSpeed(item.speedBps)}
-                {item.etaSeconds != null &&
-                  Number.isFinite(item.etaSeconds) &&
-                  item.etaSeconds < 24 * 3600 && (
-                    <>
-                      {" · "}
-                      <span className="text-foreground">
-                        {formatEta(item.etaSeconds)} left
-                      </span>
-                    </>
-                  )}
-              </>
-            ) : (
-              <span className="text-accent-peach">Stalled · retrying…</span>
-            )}
-          </div>
+          {indeterminate ? (
+            <div className="text-primary-text font-bold">
+              Uploading…
+              <span className="text-muted-foreground ml-1 font-normal">
+                · server-side stream
+              </span>
+            </div>
+          ) : (
+            <div className="text-primary-text font-bold">
+              {pct.toFixed(0)}%
+              <span className="text-muted-foreground ml-1 font-normal">
+                · {formatBytes(item.bytesUploaded)} of {formatBytes(item.size)}
+              </span>
+            </div>
+          )}
+          {!indeterminate && (
+            <div className="text-muted-foreground">
+              {item.speedBps > 0 ? (
+                <>
+                  {formatSpeed(item.speedBps)}
+                  {item.etaSeconds != null &&
+                    Number.isFinite(item.etaSeconds) &&
+                    item.etaSeconds < 24 * 3600 && (
+                      <>
+                        {" · "}
+                        <span className="text-foreground">
+                          {formatEta(item.etaSeconds)} left
+                        </span>
+                      </>
+                    )}
+                </>
+              ) : (
+                <span className="text-accent-peach">Stalled · retrying…</span>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </>
@@ -752,12 +637,7 @@ function PausedRow({
         </div>
       </div>
       <div>
-        <div className="bg-muted mb-2 h-1.5 w-full overflow-hidden rounded-full">
-          <div
-            className="bg-primary-text h-full rounded-full shadow-[0_0_10px_color-mix(in_oklab,_var(--primary-text)_40%,_transparent)]"
-            style={{ width: `${pct}%` }}
-          />
-        </div>
+        <Progress value={pct} className="mb-2 h-1.5" />
         <div className="flex items-center justify-between font-mono text-[10px]">
           <div className="text-primary-text font-bold">
             {pct.toFixed(0)}%

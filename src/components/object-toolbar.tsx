@@ -2,7 +2,9 @@ import * as React from "react";
 import {
   CheckIcon,
   CheckSquare,
+  ChevronDown,
   CloudUpload,
+  Database,
   Download,
   Eye,
   FolderOutput,
@@ -20,8 +22,17 @@ import {
 import { cn } from "@/lib/utils";
 import { formatBytes, formatCount } from "@/lib/format";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useCopied } from "@/lib/use-copied";
 import { usePrefsStore } from "@/stores/prefs";
+import { useUploadSessionStore } from "@/stores/upload-session";
 
 /**
  * Two-mode toolbar that morphs based on selection state:
@@ -152,6 +163,7 @@ export function ObjectToolbar({
             New folder
           </Button>
           <CompressBadge />
+          <StorageClassBadge />
         </div>
       )}
 
@@ -298,6 +310,106 @@ function CompressBadge() {
       />
       Compress {compressImages ? "on" : "off"}
     </button>
+  );
+}
+
+/** Canonical AWS storage classes plus the implicit "Default" sentinel. Forwarded
+ *  to S3-compatible endpoints that don't recognize them are silently treated as
+ *  STANDARD by most servers, which satisfies the Phase 9 "graceful no-op"
+ *  requirement. */
+const STORAGE_CLASS_OPTIONS: { value: string; label: string; hint?: string }[] =
+  [
+    { value: "STANDARD", label: "STANDARD", hint: "Default hot storage" },
+    { value: "STANDARD_IA", label: "STANDARD_IA", hint: "Infrequent access" },
+    {
+      value: "INTELLIGENT_TIERING",
+      label: "INTELLIGENT_TIERING",
+      hint: "Auto-tiering",
+    },
+    { value: "ONEZONE_IA", label: "ONEZONE_IA", hint: "Single-AZ IA" },
+    { value: "GLACIER_IR", label: "GLACIER_IR", hint: "Instant retrieval" },
+    { value: "GLACIER", label: "GLACIER", hint: "Archive (minutes-hours)" },
+    { value: "DEEP_ARCHIVE", label: "DEEP_ARCHIVE", hint: "Archive (hours)" },
+    {
+      value: "REDUCED_REDUNDANCY",
+      label: "REDUCED_REDUNDANCY",
+      hint: "Legacy, AWS-only",
+    },
+  ];
+
+/** Storage-class picker for the next upload batch. Reading order is
+ *  session override → persisted default pref → undefined. Selecting "Default"
+ *  clears the session override only; the persisted pref is left alone. Lives
+ *  next to CompressBadge so both per-upload knobs share the same visual rhythm.
+ */
+function StorageClassBadge() {
+  const sessionClass = useUploadSessionStore((s) => s.storageClass);
+  const setSessionClass = useUploadSessionStore((s) => s.setStorageClass);
+  const defaultClass = usePrefsStore((s) => s.defaultStorageClass);
+  const effective = sessionClass ?? defaultClass;
+  const active = effective !== undefined;
+  const label = effective ?? "Default";
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          title="Storage class for the next upload batch"
+          className={cn(
+            "hidden h-9 shrink-0 items-center gap-1.5 rounded-md border px-2.5 font-mono text-[11px] transition-colors sm:inline-flex",
+            active
+              ? "border-accent-blue/40 bg-accent-blue/10 text-accent-blue hover:bg-accent-blue/20"
+              : "border-surface-1 bg-input-bg text-muted-foreground hover:text-foreground hover:border-muted-foreground"
+          )}
+        >
+          <Database className="size-3" />
+          <span>Storage:</span>
+          <span className={active ? undefined : "text-foreground"}>{label}</span>
+          <ChevronDown className="size-3" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-64">
+        <DropdownMenuLabel className="text-muted-foreground text-[10px] font-bold tracking-wider uppercase">
+          Storage class
+        </DropdownMenuLabel>
+        <DropdownMenuItem
+          onSelect={() => setSessionClass(undefined)}
+          className="flex items-start gap-2"
+        >
+          <div className="flex w-4 shrink-0 items-center justify-center pt-0.5">
+            {effective === undefined && <CheckIcon className="size-3.5" />}
+          </div>
+          <div className="flex min-w-0 flex-1 flex-col">
+            <span className="text-foreground text-xs">Default</span>
+            <span className="text-muted-foreground text-[10px]">
+              Let the backend pick
+            </span>
+          </div>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        {STORAGE_CLASS_OPTIONS.map((opt) => (
+          <DropdownMenuItem
+            key={opt.value}
+            onSelect={() => setSessionClass(opt.value)}
+            className="flex items-start gap-2"
+          >
+            <div className="flex w-4 shrink-0 items-center justify-center pt-0.5">
+              {effective === opt.value && <CheckIcon className="size-3.5" />}
+            </div>
+            <div className="flex min-w-0 flex-1 flex-col">
+              <span className="text-foreground font-mono text-[11px]">
+                {opt.label}
+              </span>
+              {opt.hint && (
+                <span className="text-muted-foreground text-[10px]">
+                  {opt.hint}
+                </span>
+              )}
+            </div>
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 

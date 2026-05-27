@@ -557,6 +557,18 @@
   animation: scale-pop 280ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
+/* Indeterminate progress sweep — used by upload rows when total bytes are
+   unknown (e.g. server-side from-URL upload that doesn't report progress).
+   A short bar slides L→R, looping continuously so the user sees the row
+   is still alive even though no byte count is available. */
+@keyframes indeterminate-sweep {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(400%); }
+}
+@utility animate-indeterminate-sweep {
+  animation: indeterminate-sweep 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
 /* Scoped scrollbar — applies only inside the buckets browser shell so the
    setup form keeps the default theme scrollbar. */
 .themed-scope ::-webkit-scrollbar {

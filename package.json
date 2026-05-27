@@ -19,6 +19,7 @@
     "@aws-sdk/s3-request-presigner": "^3.700.0",
     "@hookform/resolvers": "^5.4.0",
     "@material-symbols/svg-400": "^0.44.9",
+    "@radix-ui/react-progress": "^1.1.8",
     "@tanstack/react-query": "^5.62.0",
     "@tanstack/react-router": "^1.95.0",
     "@tanstack/react-virtual": "^3.13.0",

@@ -26,8 +26,29 @@ export interface UploadFromUrlResult {
   contentType: string;
 }
 
+export interface UploadFromUrlPreflight {
+  size?: number;
+  contentType?: string;
+  suggestedFilename?: string;
+}
+
 function basePath(connectionId: string, bucket: string): string {
   return `/connections/${connectionId}/buckets/${encodeURIComponent(bucket)}`;
+}
+
+/** HEAD-probe the upstream URL so the upload panel can show real size +
+ *  content-type before the transfer kicks off. Returns `{}` when the upstream
+ *  yielded nothing useful; throws on hard errors (bad scheme, private host,
+ *  unreachable). */
+export async function preflightFromUrl(
+  connectionId: string,
+  bucket: string,
+  url: string
+): Promise<UploadFromUrlPreflight> {
+  return apiFetch<UploadFromUrlPreflight>(
+    `${basePath(connectionId, bucket)}/objects/from-url/preflight`,
+    { method: "POST", body: { url } }
+  );
 }
 
 export function useUploadFromUrl(
