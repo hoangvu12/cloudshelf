@@ -1,24 +1,20 @@
 /**
- * Shiki-based syntax highlighter, tuned for the file preview panel.
+ * Public façade for the file-preview syntax highlighter.
  *
- * Design goals:
- *   - Pay nothing if the user never opens a code file. The core, the JS regex
- *     engine, the theme, and every grammar are dynamic imports — Vite splits
- *     each into its own chunk, downloaded lazily on first use of that language.
- *   - One highlighter instance for the whole app, kept alive across panel
- *     opens. Grammars are loaded incrementally onto it via `loadLanguage`.
- *   - No WASM. The JS regex engine handles every language we ship and saves
- *     ~200 KB on the wire.
+ * The Shiki work runs in a Web Worker (see highlighter.worker.ts) so that
+ * tokenizing a 500KB log file doesn't stall scrolling or the prev/next keys
+ * in the preview panel. This module is the thin client: it owns the worker
+ * handle (singleton, spawned on first highlight) and correlates postMessage
+ * requests with the promises the caller is awaiting.
  *
- * The API the panel uses is just `highlightToHtml(code, lang)`. Unknown langs
- * fall back to plain text rendering (no tokenization), so we never crash on a
- * weird extension.
+ * Unknown languages fall back to plain-text rendering in the panel (no
+ * tokenization), so we never crash on a weird extension.
  */
 
-import type { HighlighterCore } from "shiki/core";
+import type { ThemedToken } from "shiki/core";
+import type { HighlightResponse, ShikiLang } from "./highlighter.worker";
 
-/** Themes the panel will ever ask for. Keep at one so we don't bloat. */
-const THEME = "catppuccin-mocha";
+export type { ShikiLang, ThemedToken };
 
 /**
  * Extension → Shiki language ID. Lowercase the input before lookup. Keep this
@@ -71,71 +67,6 @@ const EXT_TO_LANG: Record<string, ShikiLang> = {
 };
 
 /**
- * Languages we actually call into Shiki for. Listing them as a string-literal
- * union keeps the dynamic-import map honest at compile time — adding a new
- * entry to EXT_TO_LANG without adding it here is a type error.
- */
-type ShikiLang =
-  | "javascript"
-  | "jsx"
-  | "typescript"
-  | "tsx"
-  | "json"
-  | "html"
-  | "css"
-  | "scss"
-  | "markdown"
-  | "yaml"
-  | "toml"
-  | "xml"
-  | "ini"
-  | "python"
-  | "rust"
-  | "go"
-  | "java"
-  | "c"
-  | "cpp"
-  | "ruby"
-  | "php"
-  | "sql"
-  | "graphql"
-  | "shellscript"
-  | "bash"
-  | "docker";
-
-// Each loader is a thunk so Vite gets one chunk per language and the import
-// only runs on first use. Don't inline — `import()` inside the switch in
-// `ensureLang` would defeat code splitting because the arg would be dynamic.
-const LANG_LOADERS: Record<ShikiLang, () => Promise<unknown>> = {
-  javascript: () => import("shiki/langs/javascript.mjs"),
-  jsx: () => import("shiki/langs/jsx.mjs"),
-  typescript: () => import("shiki/langs/typescript.mjs"),
-  tsx: () => import("shiki/langs/tsx.mjs"),
-  json: () => import("shiki/langs/json.mjs"),
-  html: () => import("shiki/langs/html.mjs"),
-  css: () => import("shiki/langs/css.mjs"),
-  scss: () => import("shiki/langs/scss.mjs"),
-  markdown: () => import("shiki/langs/markdown.mjs"),
-  yaml: () => import("shiki/langs/yaml.mjs"),
-  toml: () => import("shiki/langs/toml.mjs"),
-  xml: () => import("shiki/langs/xml.mjs"),
-  ini: () => import("shiki/langs/ini.mjs"),
-  python: () => import("shiki/langs/python.mjs"),
-  rust: () => import("shiki/langs/rust.mjs"),
-  go: () => import("shiki/langs/go.mjs"),
-  java: () => import("shiki/langs/java.mjs"),
-  c: () => import("shiki/langs/c.mjs"),
-  cpp: () => import("shiki/langs/cpp.mjs"),
-  ruby: () => import("shiki/langs/ruby.mjs"),
-  php: () => import("shiki/langs/php.mjs"),
-  sql: () => import("shiki/langs/sql.mjs"),
-  graphql: () => import("shiki/langs/graphql.mjs"),
-  shellscript: () => import("shiki/langs/shellscript.mjs"),
-  bash: () => import("shiki/langs/bash.mjs"),
-  docker: () => import("shiki/langs/docker.mjs"),
-};
-
-/**
  * Map a filename to a Shiki language ID, or `null` if we should render as
  * plain text. Looks at extension first, then a couple of well-known
  * extensionless names.
@@ -150,53 +81,53 @@ export function shikiLangFor(name: string): ShikiLang | null {
   return EXT_TO_LANG[ext] ?? null;
 }
 
-// Module-level singletons. The promise dedupes concurrent first calls (e.g.
-// React StrictMode double-invoke in dev) so we don't build two highlighters.
-let highlighterPromise: Promise<HighlighterCore> | null = null;
-const loadedLangs = new Set<ShikiLang>();
+let worker: Worker | null = null;
+let nextId = 0;
+const pending = new Map<
+  number,
+  { resolve: (tokens: ThemedToken[][]) => void; reject: (err: Error) => void }
+>();
 
-async function getHighlighter(): Promise<HighlighterCore> {
-  if (!highlighterPromise) {
-    highlighterPromise = (async () => {
-      const [{ createHighlighterCore }, { createJavaScriptRegexEngine }, theme] =
-        await Promise.all([
-          import("shiki/core"),
-          import("shiki/engine/javascript"),
-          import("shiki/themes/catppuccin-mocha.mjs"),
-        ]);
-      return createHighlighterCore({
-        themes: [theme.default],
-        langs: [],
-        engine: createJavaScriptRegexEngine(),
-      });
-    })();
-  }
-  return highlighterPromise;
-}
-
-async function ensureLang(lang: ShikiLang): Promise<HighlighterCore> {
-  const hl = await getHighlighter();
-  if (!loadedLangs.has(lang)) {
-    const mod = await LANG_LOADERS[lang]();
-    await hl.loadLanguage((mod as { default: unknown }).default as never);
-    loadedLangs.add(lang);
-  }
-  return hl;
+function getWorker(): Worker {
+  if (worker) return worker;
+  const w = new Worker(
+    new URL("./highlighter.worker.ts", import.meta.url),
+    { type: "module" }
+  );
+  w.addEventListener("message", (ev: MessageEvent<HighlightResponse>) => {
+    const entry = pending.get(ev.data.id);
+    if (!entry) return;
+    pending.delete(ev.data.id);
+    if ("error" in ev.data) entry.reject(new Error(ev.data.error));
+    else entry.resolve(ev.data.tokens);
+  });
+  w.addEventListener("error", (ev) => {
+    // If the worker dies, fail anything in flight so callers fall back to
+    // plain text. The next highlight call will spawn a fresh worker.
+    const err = new Error(ev.message || "highlighter worker crashed");
+    for (const [, entry] of pending) entry.reject(err);
+    pending.clear();
+    worker = null;
+  });
+  worker = w;
+  return w;
 }
 
 /**
- * Tokenize `code` as `lang` and return Shiki's `<pre><code>...</code></pre>`
- * HTML, themed with Catppuccin Mocha. Caller should drop it into the DOM with
- * `dangerouslySetInnerHTML` — Shiki escapes the input itself, so the HTML it
- * returns is safe regardless of file contents.
+ * Tokenize `code` as `lang` and resolve with Shiki's 2D token array (lines ×
+ * tokens, each token has content + color + fontStyle). The panel renders this
+ * itself in a virtualized list, so only the lines visible in the viewport
+ * become DOM. Long lines come back as a single unstyled token — see the
+ * `tokenizeMaxLineLength` guard in the worker.
  */
-export async function highlightToHtml(
+export function highlightToTokens(
   code: string,
   lang: ShikiLang
-): Promise<string> {
-  const hl = await ensureLang(lang);
-  return hl.codeToHtml(code, {
-    lang,
-    theme: THEME,
+): Promise<ThemedToken[][]> {
+  const id = nextId++;
+  const w = getWorker();
+  return new Promise<ThemedToken[][]>((resolve, reject) => {
+    pending.set(id, { resolve, reject });
+    w.postMessage({ id, code, lang });
   });
 }

@@ -1,5 +1,6 @@
 import * as React from "react";
 import { toast } from "sonner";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   AlertTriangle,
   CheckIcon,
@@ -16,7 +17,11 @@ import {
 import { cn } from "@/lib/utils";
 import { formatBytes, formatFileTime } from "@/lib/format";
 import { fileAppearance, previewKind, type PreviewKind } from "@/lib/file-types";
-import { highlightToHtml, shikiLangFor } from "@/lib/highlighter";
+import {
+  highlightToTokens,
+  shikiLangFor,
+  type ThemedToken,
+} from "@/lib/highlighter";
 import { basename } from "@/lib/object-path";
 import { fetchDownloadUrl, usePreviewUrl } from "@/lib/api/objects";
 import { useObjects } from "@/lib/api/objects";
@@ -446,12 +451,12 @@ function PdfPreview({ url }: { url: string }) {
  *   1. Fetch the presigned URL, capped at TEXT_PREVIEW_BYTES via Range so we
  *      don't OOM on a multi-GB log file.
  *   2. If the extension maps to a known Shiki language, tokenize + theme it
- *      via the lazy-loaded highlighter (Catppuccin Mocha). Otherwise render
- *      as plain text in the same shell so the visual stays consistent.
+ *      in a worker (see highlighter.ts) and swap in. Otherwise render as
+ *      plain text in the same shell so the visual stays consistent.
  *
- * Shiki returns themed `<pre><code>` HTML; we render it via
- * dangerouslySetInnerHTML and add a CSS-counter gutter for line numbers. The
- * highlighter escapes input, so untrusted file contents can't inject.
+ * Rendering is virtualized — only the ~30 lines visible in the viewport are
+ * mounted at a time. This is what keeps a 3MB JSON readable instead of
+ * dumping tens of thousands of token spans into the DOM at once.
  */
 function TextPreview({
   url,
@@ -468,7 +473,7 @@ function TextPreview({
     | { kind: "error"; message: string };
 
   const [state, setState] = React.useState<FetchState>({ kind: "loading" });
-  const [html, setHtml] = React.useState<string | null>(null);
+  const [tokens, setTokens] = React.useState<ThemedToken[][] | null>(null);
   const [highlighting, setHighlighting] = React.useState(false);
 
   const lang = React.useMemo(() => shikiLangFor(name), [name]);
@@ -476,7 +481,7 @@ function TextPreview({
   React.useEffect(() => {
     let cancelled = false;
     setState({ kind: "loading" });
-    setHtml(null);
+    setTokens(null);
 
     const willTruncate =
       typeof size === "number" && size > TEXT_PREVIEW_BYTES;
@@ -510,20 +515,23 @@ function TextPreview({
 
   React.useEffect(() => {
     if (state.kind !== "ok" || !lang) {
-      setHtml(null);
+      setTokens(null);
       return;
     }
     let cancelled = false;
     setHighlighting(true);
-    highlightToHtml(state.text, lang)
-      .then((out) => {
+    highlightToTokens(state.text, lang)
+      .then((toks) => {
         if (cancelled) return;
-        setHtml(out);
+        // startTransition lets React interrupt the rerender if the user clicks
+        // prev/next before the (visible-only) rows finish re-mounting with
+        // their styled spans.
+        React.startTransition(() => setTokens(toks));
       })
       .catch(() => {
-        // Highlighting failure falls back to plain text by leaving html null.
+        // Highlighting failure falls back to plain text.
         if (cancelled) return;
-        setHtml(null);
+        setTokens(null);
       })
       .finally(() => {
         if (cancelled) return;
@@ -554,26 +562,7 @@ function TextPreview({
 
   return (
     <div className="border-border bg-input-bg border-b">
-      <div className="max-h-[60vh] overflow-auto">
-        {lang && html ? (
-          <div
-            className={cn(
-              "shiki-preview font-mono text-[11px] leading-5",
-              // Pull Shiki's output into our chrome: transparent bg, our
-              // padding, and a counter-driven gutter on each .line span.
-              "[&_pre]:!bg-transparent [&_pre]:m-0 [&_pre]:py-2 [&_pre]:pr-3",
-              "[&_code]:block [&_code]:[counter-reset:line]",
-              "[&_.line]:relative [&_.line]:pl-12",
-              "[&_.line]:before:absolute [&_.line]:before:left-0 [&_.line]:before:w-9 [&_.line]:before:pr-2 [&_.line]:before:text-right [&_.line]:before:text-muted-foreground [&_.line]:before:select-none",
-              "[&_.line]:before:[content:counter(line)] [&_.line]:before:[counter-increment:line]"
-            )}
-            // Shiki escapes input itself, safe to inject.
-            dangerouslySetInnerHTML={{ __html: html }}
-          />
-        ) : (
-          <PlainText text={state.text} />
-        )}
-      </div>
+      <VirtualText text={state.text} tokens={tokens} />
       {highlighting && lang && (
         <div className="border-border text-muted-foreground bg-card/60 flex items-center gap-1.5 border-t px-3 py-1.5 font-mono text-[10px]">
           <Loader2 className="size-3 animate-spin" />
@@ -590,38 +579,175 @@ function TextPreview({
   );
 }
 
+/** Matches `font-mono text-[11px] leading-5` (1.25rem = 20px at 16px root). */
+const LINE_HEIGHT_PX = 20;
+
 /**
- * Plain-text fallback for unrecognized languages and for the brief window
- * while Shiki is still loading. Keeps the same shape as the highlighted
- * branch so the panel doesn't visually jump when highlighting finishes.
+ * Hard cap on what any single line is allowed to render visually. Beyond this
+ * we slice and add a "... N more chars" marker — same approach Monaco's
+ * `editor.stopRenderingLineAfter` takes. Keeps a 512KB single-line minified
+ * JSON from spawning one giant span the browser has to lay out.
  */
-function PlainText({ text }: { text: string }) {
-  const lines = React.useMemo(() => {
+const MAX_LINE_CHARS = 5_000;
+
+/**
+ * Virtualized line viewer. Accepts either Shiki tokens (lines × tokens) or
+ * falls back to splitting plain text by newline. Whichever it has, only the
+ * lines currently in the viewport are mounted in the DOM. The scroll
+ * container scrolls both axes; the line-number gutter is sticky so it stays
+ * visible while panning horizontally on long lines.
+ */
+function VirtualText({
+  text,
+  tokens,
+}: {
+  text: string;
+  tokens: ThemedToken[][] | null;
+}) {
+  const plainLines = React.useMemo<string[] | null>(() => {
+    if (tokens) return null;
     const arr = text.split("\n");
     if (arr.length > 0 && arr[arr.length - 1] === "") arr.pop();
     return arr;
-  }, [text]);
-  const gutterWidth = String(lines.length || 1).length;
+  }, [text, tokens]);
+
+  const lineCount = tokens ? tokens.length : (plainLines?.length ?? 0);
+  const gutterChars = String(Math.max(1, lineCount)).length;
+
+  const parentRef = React.useRef<HTMLDivElement>(null);
+  const virtualizer = useVirtualizer({
+    count: lineCount,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => LINE_HEIGHT_PX,
+    overscan: 20,
+  });
+
+  const items = virtualizer.getVirtualItems();
+  const totalSize = virtualizer.getTotalSize();
+  // Padded-virtualization layout: the spacer divs above and below the rendered
+  // window push the rendered slice into its true scroll position. Cheaper to
+  // reason about than absolute positioning when each row also needs to
+  // contribute to horizontal scroll width and host a sticky gutter.
+  const topPad = items[0]?.start ?? 0;
+  const bottomPad = totalSize - (items[items.length - 1]?.end ?? 0);
 
   return (
-    <pre className="text-foreground flex font-mono text-[11px] leading-5">
-      <code
-        aria-hidden
-        className="text-muted-foreground border-border bg-card/60 sticky left-0 shrink-0 border-r px-2 py-2 text-right select-none"
+    <div ref={parentRef} className="max-h-[60vh] overflow-auto">
+      <div
+        className="font-mono text-[11px] leading-5"
+        style={{ paddingTop: topPad, paddingBottom: bottomPad }}
       >
-        {lines.map((_, i) => (
-          <div key={i}>{String(i + 1).padStart(gutterWidth, " ")}</div>
+        {items.map((vr) => (
+          <LineRow
+            key={vr.index}
+            index={vr.index}
+            height={vr.size}
+            gutterChars={gutterChars}
+            tokens={tokens ? tokens[vr.index] : undefined}
+            text={plainLines ? plainLines[vr.index] : undefined}
+          />
         ))}
-      </code>
-      <code className="min-w-0 flex-1 px-3 py-2">
-        {lines.map((line, i) => (
-          <div key={i} className="whitespace-pre">
-            {line || " "}
-          </div>
-        ))}
-      </code>
-    </pre>
+      </div>
+    </div>
   );
+}
+
+function LineRow({
+  index,
+  height,
+  gutterChars,
+  tokens,
+  text,
+}: {
+  index: number;
+  height: number;
+  gutterChars: number;
+  tokens?: ThemedToken[];
+  text?: string;
+}) {
+  return (
+    <div className="flex" style={{ height }}>
+      <span
+        aria-hidden
+        className="text-muted-foreground bg-card/60 border-border sticky left-0 z-10 shrink-0 border-r px-2 text-right select-none"
+        style={{ width: `${gutterChars + 1}ch` }}
+      >
+        {index + 1}
+      </span>
+      <span className="whitespace-pre px-3">
+        {tokens
+          ? renderTokenLine(tokens)
+          : renderPlainLine(text ?? "")}
+      </span>
+    </div>
+  );
+}
+
+function renderTokenLine(tokens: ThemedToken[]): React.ReactNode {
+  let total = 0;
+  for (const t of tokens) total += t.content.length;
+
+  if (total === 0) return " ";
+  if (total <= MAX_LINE_CHARS) {
+    return tokens.map((t, i) => (
+      <span key={i} style={tokenStyle(t)}>
+        {t.content}
+      </span>
+    ));
+  }
+
+  // Slice token-by-token until we hit the per-line cap, then append a marker.
+  let remaining = MAX_LINE_CHARS;
+  const spans: React.ReactNode[] = [];
+  for (let i = 0; i < tokens.length && remaining > 0; i++) {
+    const t = tokens[i]!;
+    const slice =
+      t.content.length > remaining ? t.content.slice(0, remaining) : t.content;
+    spans.push(
+      <span key={i} style={tokenStyle(t)}>
+        {slice}
+      </span>
+    );
+    remaining -= slice.length;
+  }
+  spans.push(<TruncatedMarker key="trunc" extra={total - MAX_LINE_CHARS} />);
+  return spans;
+}
+
+function renderPlainLine(line: string): React.ReactNode {
+  if (line.length === 0) return " ";
+  if (line.length <= MAX_LINE_CHARS) return line;
+  return (
+    <>
+      {line.slice(0, MAX_LINE_CHARS)}
+      <TruncatedMarker extra={line.length - MAX_LINE_CHARS} />
+    </>
+  );
+}
+
+function TruncatedMarker({ extra }: { extra: number }) {
+  return (
+    <span className="text-muted-foreground italic">
+      {` … (${extra.toLocaleString()} more chars)`}
+    </span>
+  );
+}
+
+/**
+ * Shiki's FontStyle is a bitfield: Italic=1, Bold=2, Underline=4,
+ * Strikethrough=8. NotSet is -1 (all bits set), so we gate on `> 0` to avoid
+ * treating "not set" as "everything set".
+ */
+function tokenStyle(t: ThemedToken): React.CSSProperties {
+  const fs = t.fontStyle ?? 0;
+  const styled = fs > 0;
+  return {
+    color: t.color,
+    backgroundColor: t.bgColor,
+    fontStyle: styled && (fs & 1) !== 0 ? "italic" : undefined,
+    fontWeight: styled && (fs & 2) !== 0 ? "bold" : undefined,
+    textDecoration: styled && (fs & 4) !== 0 ? "underline" : undefined,
+  };
 }
 
 function Row({ label, value }: { label: string; value: string }) {
