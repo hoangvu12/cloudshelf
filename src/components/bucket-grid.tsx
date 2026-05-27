@@ -3,10 +3,17 @@ import {
   Database,
   MoreHorizontal,
   Pin,
+  Settings,
   type LucideIcon,
 } from "@/lib/icons";
 
 import { cn } from "@/lib/utils";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { formatFileTime } from "@/lib/format";
 import { usePrefsStore } from "@/stores/prefs";
 import type { Bucket } from "@server/types";
@@ -30,6 +37,7 @@ export function BucketGrid({
   sortKey,
   onTogglePin,
   onOpenBucket,
+  onOpenSettings,
 }: {
   buckets: Bucket[];
   pinnedNames: Set<string>;
@@ -37,6 +45,7 @@ export function BucketGrid({
   sortKey: SortKey;
   onTogglePin?: (name: string) => void;
   onOpenBucket?: (name: string) => void;
+  onOpenSettings?: (name: string) => void;
 }) {
   const filtered = React.useMemo(() => {
     const needle = filter.trim().toLowerCase();
@@ -62,6 +71,7 @@ export function BucketGrid({
               density={density}
               onTogglePin={onTogglePin}
               onOpen={onOpenBucket}
+              onOpenSettings={onOpenSettings}
             />
           ))}
         </Section>
@@ -79,6 +89,7 @@ export function BucketGrid({
               density={density}
               onTogglePin={onTogglePin}
               onOpen={onOpenBucket}
+              onOpenSettings={onOpenSettings}
             />
           ))}
         </Section>
@@ -101,12 +112,14 @@ function BucketCard({
   density,
   onTogglePin,
   onOpen,
+  onOpenSettings,
 }: {
   bucket: Bucket;
   pinned: boolean;
   density: "comfortable" | "compact";
   onTogglePin?: (name: string) => void;
   onOpen?: (name: string) => void;
+  onOpenSettings?: (name: string) => void;
 }) {
   const { Icon, accent } = bucketAppearance(bucket.name);
   const compact = density === "compact";
@@ -132,21 +145,56 @@ function BucketCard({
         <Icon
           className={cn(compact ? "size-7" : "size-10", accent)}
         />
-        <div className="flex items-center gap-1">
-          {pinned && (
-            <Pin
-              key={popKey}
-              className={cn("fill-accent-yellow text-accent-yellow size-3", popClass)}
-            />
-          )}
+        <div className="flex items-center gap-2">
           <button
             type="button"
-            aria-label="More actions"
-            onClick={(e) => e.stopPropagation()}
-            className="text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 focus:outline-none"
+            aria-label={pinned ? "Unpin bucket" : "Pin bucket"}
+            aria-pressed={pinned}
+            onClick={(e) => {
+              e.stopPropagation();
+              onTogglePin?.(bucket.name);
+            }}
+            className={cn(
+              "focus:outline-none",
+              pinned
+                ? "text-accent-yellow"
+                : "text-muted-foreground hover:text-accent-yellow"
+            )}
           >
-            <MoreHorizontal className="size-4" />
+            <Pin
+              key={popKey}
+              className={cn("size-3.5", pinned && "fill-accent-yellow", popClass)}
+            />
           </button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                aria-label="More actions"
+                onClick={(e) => e.stopPropagation()}
+                className="text-muted-foreground hover:text-foreground focus:outline-none"
+              >
+                <MoreHorizontal className="size-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="end"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <DropdownMenuItem
+                onSelect={() => onOpenSettings?.(bucket.name)}
+              >
+                <Settings className="size-3.5" />
+                Settings
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => onTogglePin?.(bucket.name)}
+              >
+                <Pin className="size-3.5" />
+                {pinned ? "Unpin" : "Pin"}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -166,25 +214,6 @@ function BucketCard({
           </div>
         )}
       </div>
-
-      <button
-        type="button"
-        aria-label={pinned ? "Unpin bucket" : "Pin bucket"}
-        aria-pressed={pinned}
-        onClick={(e) => {
-          e.stopPropagation();
-          onTogglePin?.(bucket.name);
-        }}
-        className={cn(
-          "absolute top-2 right-2 focus:outline-none",
-          pinned ? "text-accent-yellow" : "text-muted-foreground hover:text-accent-yellow opacity-0 group-hover:opacity-100"
-        )}
-      >
-        <Pin
-          key={popKey}
-          className={cn("size-3.5", pinned && "fill-accent-yellow", popClass)}
-        />
-      </button>
     </div>
   );
 }

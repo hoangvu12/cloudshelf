@@ -3,10 +3,17 @@ import {
   Database,
   MoreHorizontal,
   Pin,
+  Settings,
   type LucideIcon,
 } from "@/lib/icons";
 
 import { cn } from "@/lib/utils";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { formatFileTime } from "@/lib/format";
 import { usePrefsStore } from "@/stores/prefs";
 import type { Bucket } from "@server/types";
@@ -24,6 +31,7 @@ export function BucketList({
   sortKey,
   onTogglePin,
   onOpenBucket,
+  onOpenSettings,
 }: {
   buckets: Bucket[];
   pinnedNames: Set<string>;
@@ -31,6 +39,7 @@ export function BucketList({
   sortKey: SortKey;
   onTogglePin?: (name: string) => void;
   onOpenBucket?: (name: string) => void;
+  onOpenSettings?: (name: string) => void;
 }) {
   const filtered = React.useMemo(() => {
     const needle = filter.trim().toLowerCase();
@@ -56,6 +65,7 @@ export function BucketList({
             density={density}
             onTogglePin={onTogglePin}
             onOpen={onOpenBucket}
+            onOpenSettings={onOpenSettings}
           />
         ))}
         {pinned.length > 0 && other.length > 0 && (
@@ -69,6 +79,7 @@ export function BucketList({
             density={density}
             onTogglePin={onTogglePin}
             onOpen={onOpenBucket}
+            onOpenSettings={onOpenSettings}
           />
         ))}
       </div>
@@ -93,12 +104,14 @@ function BucketRow({
   density,
   onTogglePin,
   onOpen,
+  onOpenSettings,
 }: {
   bucket: Bucket;
   pinned: boolean;
   density: "comfortable" | "compact";
   onTogglePin?: (name: string) => void;
   onOpen?: (name: string) => void;
+  onOpenSettings?: (name: string) => void;
 }) {
   const { Icon, accent } = bucketAppearance(bucket.name);
 
@@ -143,7 +156,7 @@ function BucketRow({
         {formatFileTime(bucket.createdAt)}
       </Cell>
 
-      <div className="row-actions hidden w-16 justify-end gap-2 opacity-0 transition-opacity group-hover:opacity-100 sm:flex">
+      <div className="row-actions hidden w-16 items-center justify-end gap-2 sm:flex">
         <button
           type="button"
           aria-label={pinned ? "Unpin bucket" : "Pin bucket"}
@@ -164,14 +177,35 @@ function BucketRow({
             className={cn("size-3.5", pinned && "fill-accent-yellow", popClass)}
           />
         </button>
-        <button
-          type="button"
-          aria-label="More actions"
-          onClick={(e) => e.stopPropagation()}
-          className="text-muted-foreground hover:text-foreground focus:outline-none"
-        >
-          <MoreHorizontal className="size-4" />
-        </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              aria-label="More actions"
+              onClick={(e) => e.stopPropagation()}
+              className="text-muted-foreground hover:text-foreground focus:outline-none"
+            >
+              <MoreHorizontal className="size-4" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="end"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <DropdownMenuItem
+              onSelect={() => onOpenSettings?.(bucket.name)}
+            >
+              <Settings className="size-3.5" />
+              Settings
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onSelect={() => onTogglePin?.(bucket.name)}
+            >
+              <Pin className="size-3.5" />
+              {pinned ? "Unpin" : "Pin"}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </div>
   );

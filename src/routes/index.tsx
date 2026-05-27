@@ -8,7 +8,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { BreadcrumbPath } from "@/components/breadcrumb-path";
 import { BucketList } from "@/components/bucket-list";
 import { BucketGrid } from "@/components/bucket-grid";
-import { CreateBucketDialog } from "@/components/bucket-dialogs";
+import { BucketSettingsDialog, CreateBucketDialog } from "@/components/bucket-dialogs";
 import {
   CommandPalette,
   useCommandPaletteShortcut,
@@ -60,6 +60,7 @@ function HomePage() {
   const [filter, setFilter] = React.useState("");
   const [paletteOpen, setPaletteOpen] = useCommandPaletteShortcut();
   const [createBucketOpen, setCreateBucketOpen] = React.useState(false);
+  const [settingsBucket, setSettingsBucket] = React.useState<string | null>(null);
 
   const createBucket = useCreateBucket(activeId, {
     onSuccess: ({ name }) => {
@@ -116,6 +117,7 @@ function HomePage() {
             params: { bucketName: name, _splat: "" },
           })
         }
+        onOpenSettings={(name) => setSettingsBucket(name)}
       />
 
       <AppStatusBar
@@ -144,6 +146,13 @@ function HomePage() {
         onOpenChange={setCreateBucketOpen}
         pending={createBucket.isPending}
         onSubmit={(name) => createBucket.mutate({ name })}
+      />
+
+      <BucketSettingsDialog
+        open={settingsBucket !== null}
+        onOpenChange={(o) => !o && setSettingsBucket(null)}
+        connectionId={activeId}
+        bucket={settingsBucket}
       />
     </AppShell>
   );
@@ -196,6 +205,7 @@ function BucketsMain({
   onAddConnection,
   onCreateBucket,
   onOpenBucket,
+  onOpenSettings,
 }: {
   state: PageState;
   buckets: Bucket[];
@@ -205,6 +215,7 @@ function BucketsMain({
   onAddConnection: () => void;
   onCreateBucket: () => void;
   onOpenBucket: (name: string) => void;
+  onOpenSettings: (name: string) => void;
 }) {
   switch (state.kind) {
     case "loading-connections":
@@ -274,6 +285,7 @@ function BucketsMain({
         filter={filter}
         onTogglePin={onTogglePin}
         onOpenBucket={onOpenBucket}
+        onOpenSettings={onOpenSettings}
       />;
   }
 }
@@ -284,6 +296,7 @@ function BucketsRenderer(props: {
   filter: string;
   onTogglePin: (name: string) => void;
   onOpenBucket: (name: string) => void;
+  onOpenSettings: (name: string) => void;
 }) {
   const viewMode = usePrefsStore((s) => s.viewMode);
   const Component = viewMode === "grid" ? BucketGrid : BucketList;
