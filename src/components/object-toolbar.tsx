@@ -3,7 +3,6 @@ import {
   CheckIcon,
   CheckSquare,
   ChevronDown,
-  CloudUpload,
   Database,
   Download,
   Eye,
@@ -138,26 +137,11 @@ export function ObjectToolbar({
         </div>
       ) : (
         <div className="flex items-center gap-2">
-          <Button onClick={onUpload}>
-            <UploadCloud />
-            Upload
-          </Button>
-          <Button
-            variant="outline"
-            onClick={onUploadFolder}
-            title="Pick a folder — its full subtree uploads, keys preserve the directory structure"
-          >
-            <FolderUp />
-            Upload folder
-          </Button>
-          <Button
-            variant="outline"
-            onClick={onUploadFromUrl}
-            title="Server-side streaming upload — paste a public URL and it lands at the current prefix without touching your bandwidth"
-          >
-            <CloudUpload />
-            From URL
-          </Button>
+          <UploadMenu
+            onUpload={onUpload}
+            onUploadFolder={onUploadFolder}
+            onUploadFromUrl={onUploadFromUrl}
+          />
           <Button variant="outline" onClick={onNewFolder}>
             <FolderPlus className="text-accent-blue" />
             New folder
@@ -276,6 +260,50 @@ function FilterInput({
         className="bg-input-bg border-border text-foreground focus:border-primary-text placeholder:text-surface-1 w-48 rounded border py-1.5 pr-3 pl-8 font-mono text-xs transition-colors focus:outline-none"
       />
     </div>
+  );
+}
+
+/**
+ * Single Upload button that opens a dropdown with the three upload paths
+ * (files, folder, from-URL). Double-click on the button bypasses the menu
+ * and goes straight to the file picker — that's the most common path, so
+ * the shortcut is worth the tiny "menu flash" the second click causes
+ * (Radix toggles the menu open on click 1, closed on click 2, then
+ * onDoubleClick fires and triggers the picker).
+ */
+function UploadMenu({
+  onUpload,
+  onUploadFolder,
+  onUploadFromUrl,
+}: {
+  onUpload: () => void;
+  onUploadFolder: () => void;
+  onUploadFromUrl: () => void;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button>
+          <UploadCloud />
+          Upload
+          <ChevronDown className="-mr-0.5 size-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-64">
+        <DropdownMenuItem onSelect={onUpload} className="whitespace-nowrap">
+          <UploadCloud />
+          Upload files
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={onUploadFolder} className="whitespace-nowrap">
+          <FolderUp />
+          Upload folder
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={onUploadFromUrl} className="whitespace-nowrap">
+          <LinkIcon />
+          From URL
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 

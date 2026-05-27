@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Loader2 } from "@/lib/icons";
+import { Loader2, RotateCw, X, XCircle } from "@/lib/icons";
 import { folderIconFor } from "@/lib/folder-icons";
 import { useVirtualizer } from "@tanstack/react-virtual";
 
@@ -10,6 +10,10 @@ import { ObjectListContextMenu } from "@/components/object-context-menu";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useIsSelected } from "@/stores/selection";
 import { usePrefsStore } from "@/stores/prefs";
+import {
+  usePendingByEntryId,
+  useUploadsStore,
+} from "@/stores/uploads";
 import type { ContextAction } from "@/components/object-list";
 import type { RowClickModifiers } from "@/components/object-row";
 import type { S3Entry } from "@server/types";
@@ -43,6 +47,9 @@ const PREFETCH_THRESHOLD = 2;
 export function ObjectGrid({
   visible,
   currentPrefix,
+  connectionId,
+  bucket,
+  pendingIds,
   onSelectRow,
   onOpen,
   onContextAction,
@@ -52,6 +59,9 @@ export function ObjectGrid({
 }: {
   visible: S3Entry[];
   currentPrefix: string;
+  connectionId: string;
+  bucket: string;
+  pendingIds: ReadonlySet<string>;
   onSelectRow: (entry: S3Entry, mods: RowClickModifiers) => void;
   onOpen: (entry: S3Entry) => void;
   onContextAction: (entry: S3Entry, action: ContextAction) => void;
@@ -164,6 +174,9 @@ export function ObjectGrid({
                     key={entryId(entry)}
                     entry={entry}
                     currentPrefix={currentPrefix}
+                    connectionId={connectionId}
+                    bucket={bucket}
+                    isPending={pendingIds.has(entryId(entry))}
                     compact={compact}
                     onSelectRow={onSelectRow}
                     onOpen={onOpen}
@@ -202,31 +215,44 @@ function LoaderRow({ loading }: { loading: boolean }) {
 function ObjectTileImpl({
   entry,
   currentPrefix,
+  connectionId,
+  bucket,
+  isPending = false,
   compact,
   onSelectRow,
   onOpen,
 }: {
   entry: S3Entry;
   currentPrefix: string;
+  connectionId: string;
+  bucket: string;
+  isPending?: boolean;
   compact: boolean;
   onSelectRow: (entry: S3Entry, mods: RowClickModifiers) => void;
   onOpen: (entry: S3Entry) => void;
 }) {
   const id = entryId(entry);
   const selected = useIsSelected(id);
+  // `enabled = isPending` makes the selector a no-op for non-pending tiles.
+  const pendingDisplay = usePendingByEntryId(connectionId, bucket, id, isPending);
+  const actions = useUploadsStore((s) => s.actions);
 
   const isFolder = entry.type === "prefix";
   const display = entryDisplayName(entry, currentPrefix);
-  // Folder icons come from Material Icon Theme (colored per folder type), so
-  // no Tailwind color class is needed. Files keep their per-extension accent.
   const { Icon, color } = isFolder
     ? { Icon: folderIconFor(display.replace(/\/$/, "")), color: "" }
     : fileAppearance(display);
 
+  const failed =
+    pendingDisplay?.kind === "file"
+      ? pendingDisplay.status === "failed"
+      : pendingDisplay?.kind === "folder"
+        ? pendingDisplay.anyFailed
+        : false;
+
   const handleClick = (e: React.MouseEvent) => {
+    if (pendingDisplay) return;
     const mods = { shift: e.shiftKey, meta: e.metaKey || e.ctrlKey };
-    // Same shape as ObjectRow: folder plain-click navigates, file plain-click
-    // opens preview, any modifier routes through selection.
     if (!mods.shift && !mods.meta) {
       onOpen(entry);
       return;
@@ -234,42 +260,109 @@ function ObjectTileImpl({
     onSelectRow(entry, mods);
   };
 
+  const pct =
+    pendingDisplay?.kind === "file" &&
+    !pendingDisplay.indeterminate &&
+    pendingDisplay.size > 0
+      ? Math.min(
+          100,
+          (pendingDisplay.bytesUploaded / pendingDisplay.size) * 100
+        )
+      : null;
+
   return (
     <div
       onClick={handleClick}
       data-entry-id={id}
+      data-pending={pendingDisplay ? "true" : undefined}
       className={cn(
-        "group border-border bg-card/40 hover:border-surface-1 hover:bg-muted/50 relative flex h-full cursor-pointer flex-col items-center rounded-lg border text-center select-none",
+        "group border-border bg-card/40 relative flex h-full flex-col items-center rounded-lg border text-center select-none",
         compact ? "gap-1.5 p-2" : "gap-2 p-3",
+        pendingDisplay
+          ? "cursor-default"
+          : "hover:border-surface-1 hover:bg-muted/50 cursor-pointer",
         selected &&
-          "border-primary-text/60 bg-muted hover:border-primary-text/60"
+          "border-primary-text/60 bg-muted hover:border-primary-text/60",
+        pendingDisplay && !failed && "opacity-80",
+        failed && "border-destructive/40 bg-destructive/5"
       )}
     >
-      <div
-        className="absolute top-1.5 left-1.5 z-10 opacity-0 transition-opacity group-hover:opacity-100 data-[selected=true]:opacity-100"
-        data-selected={selected}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <Checkbox
-          checked={selected}
-          onCheckedChange={() =>
-            onSelectRow(entry, { shift: false, meta: true })
-          }
-          aria-label={`Select ${display}`}
-        />
-      </div>
+      {!pendingDisplay && (
+        <div
+          className="absolute top-1.5 left-1.5 z-10 opacity-0 transition-opacity group-hover:opacity-100 data-[selected=true]:opacity-100"
+          data-selected={selected}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Checkbox
+            checked={selected}
+            onCheckedChange={() =>
+              onSelectRow(entry, { shift: false, meta: true })
+            }
+            aria-label={`Select ${display}`}
+          />
+        </div>
+      )}
 
-      <Icon className={cn(color, compact ? "size-8" : "size-12")} />
+      <div className="relative">
+        <Icon className={cn(color, compact ? "size-8" : "size-12")} />
+        {pendingDisplay && (
+          <div className="bg-background absolute -right-1 -bottom-1 rounded-full p-0.5">
+            {failed ? (
+              <XCircle className="text-destructive size-3.5" />
+            ) : (
+              <Loader2 className="text-primary-text size-3.5 animate-spin" />
+            )}
+          </div>
+        )}
+      </div>
       <div
         className={cn(
-          "text-foreground w-full truncate text-center",
+          "w-full truncate text-center",
           compact ? "text-[11px]" : "text-xs",
+          failed ? "text-destructive" : "text-foreground",
           selected && "font-medium"
         )}
-        title={display}
+        title={
+          pendingDisplay?.kind === "file"
+            ? pendingDisplay.lastError ?? display
+            : display
+        }
       >
         {display}
       </div>
+
+      {pct !== null && (
+        <div className="bg-muted absolute right-2 bottom-1.5 left-2 h-0.5 overflow-hidden rounded-full">
+          <div
+            className="bg-primary-text h-full rounded-full transition-[width] duration-200 ease-linear"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+      )}
+
+      {failed && pendingDisplay?.kind === "file" && (
+        <div
+          className="absolute top-1.5 right-1.5 z-10 flex items-center gap-0.5"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            type="button"
+            onClick={() => actions.retry(pendingDisplay.uploadId)}
+            title="Retry upload"
+            className="bg-background/80 hover:bg-muted text-muted-foreground hover:text-foreground rounded p-0.5 focus:outline-none"
+          >
+            <RotateCw className="size-3" />
+          </button>
+          <button
+            type="button"
+            onClick={() => actions.cancel(pendingDisplay.uploadId)}
+            title="Dismiss"
+            className="bg-background/80 hover:bg-destructive/10 text-muted-foreground hover:text-destructive rounded p-0.5 focus:outline-none"
+          >
+            <X className="size-3" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

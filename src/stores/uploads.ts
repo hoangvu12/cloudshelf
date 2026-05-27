@@ -12,13 +12,17 @@
  *   - completion listeners (onUploadCompleted) that match the old contract,
  *     so object-browser can invalidate queries for the right bucket/prefix.
  */
+import * as React from "react";
 import { create } from "zustand";
+import { useShallow } from "zustand/react/shallow";
 import type { UppyFile } from "@uppy/core";
 import { getUppy, MULTIPART_THRESHOLD, type UploadMeta } from "@/lib/uppy";
 import type { UploadInputFile } from "@/components/upload-dropzone";
 import { fingerprint, getResume } from "@/lib/upload-resume";
+import { normalizePrefix } from "@/lib/object-path";
 import { usePrefsStore } from "@/stores/prefs";
 import { useUploadSessionStore } from "@/stores/upload-session";
+import type { S3ObjectEntry, S3PrefixEntry } from "@server/types";
 
 export type UploadStatus =
   | "queued"
@@ -541,4 +545,183 @@ export const useUploadsStore = create<UploadsState>((set) => {
 // ─── Per-row hook ──────────────────────────────────────────────────────────
 export function useUploadItem(id: string): UploadItem | undefined {
   return useUploadsStore((s) => s.items[id]);
+}
+
+// ─── Optimistic file-browser entries ───────────────────────────────────────
+// Active uploads surface as synthetic rows in the bucket listing so the user
+// sees their files appear immediately, before the upload-completed listener
+// invalidates the React Query and the real entry shows up. Folder uploads
+// collapse into a single synthetic prefix row at the top level — the user
+// can't drill in until the listing refreshes, which keeps us from having to
+// fake a nested view of files that don't exist on S3 yet.
+
+const ACTIVE_PENDING_STATUSES: ReadonlySet<UploadStatus> = new Set<UploadStatus>(
+  ["uploading", "queued", "paused", "failed"]
+);
+
+export interface PendingFileInfo {
+  kind: "file";
+  uploadId: string;
+  status: "uploading" | "queued" | "paused" | "failed";
+  bytesUploaded: number;
+  size: number;
+  lastError?: string;
+  /** Server-stream uploads (e.g. from-URL) have no byte-level progress. */
+  indeterminate: boolean;
+}
+
+export interface PendingFolderInfo {
+  kind: "folder";
+  fileCount: number;
+  totalBytes: number;
+  bytesUploaded: number;
+  anyFailed: boolean;
+  anyUploading: boolean;
+}
+
+export type PendingInfo = PendingFileInfo | PendingFolderInfo;
+
+/**
+ * Synthetic entries to merge into the bucket listing. The selector splits
+ * into a *signature* read (only changes when the SET of pending entries
+ * changes — adds, removes, or size updates) and a `useMemo` that derives the
+ * actual entry shapes. Progress ticks don't move the signature, so the
+ * subscribing component doesn't re-render on every byte update; the
+ * per-row hook (`usePendingByEntryId`) handles those.
+ */
+export function usePendingEntriesForPrefix(
+  connectionId: string,
+  bucket: string,
+  currentPrefix: string
+): { files: S3ObjectEntry[]; folders: S3PrefixEntry[] } {
+  const norm = normalizePrefix(currentPrefix);
+  const signature = useUploadsStore((s) => {
+    const parts: string[] = [];
+    for (const id of s.order) {
+      const it = s.items[id];
+      if (!it) continue;
+      if (it.connectionId !== connectionId || it.bucket !== bucket) continue;
+      if (!ACTIVE_PENDING_STATUSES.has(it.status)) continue;
+      if (!it.key.startsWith(norm)) continue;
+      const suffix = it.key.slice(norm.length);
+      if (!suffix) continue;
+      const slash = suffix.indexOf("/");
+      if (slash === -1) {
+        // Size is part of the signature so server-stream rows that learn
+        // their size mid-flight refresh their synthetic entry.
+        parts.push(`f:${it.key}:${it.size}`);
+      } else {
+        parts.push(`d:${norm}${suffix.slice(0, slash + 1)}`);
+      }
+    }
+    parts.sort();
+    return parts.join("|");
+  });
+
+  return React.useMemo(() => {
+    const fileSeen = new Set<string>();
+    const files: S3ObjectEntry[] = [];
+    const folderSet = new Set<string>();
+    const state = useUploadsStore.getState();
+    // One timestamp shared across all synthetic rows in this memo eval, so
+    // they sort consistently against each other under a modified-date sort.
+    const lastModified = new Date().toISOString();
+    for (const id of state.order) {
+      const it = state.items[id];
+      if (!it) continue;
+      if (it.connectionId !== connectionId || it.bucket !== bucket) continue;
+      if (!ACTIVE_PENDING_STATUSES.has(it.status)) continue;
+      if (!it.key.startsWith(norm)) continue;
+      const suffix = it.key.slice(norm.length);
+      if (!suffix) continue;
+      const slash = suffix.indexOf("/");
+      if (slash === -1) {
+        if (fileSeen.has(it.key)) continue;
+        fileSeen.add(it.key);
+        files.push({
+          type: "object",
+          key: it.key,
+          size: it.size,
+          lastModified,
+        });
+      } else {
+        folderSet.add(norm + suffix.slice(0, slash + 1));
+      }
+    }
+    const folders: S3PrefixEntry[] = Array.from(folderSet).map((prefix) => ({
+      type: "prefix",
+      prefix,
+    }));
+    return { files, folders };
+    // signature captures every store change relevant to entry identity; the
+    // other deps are inputs from the caller.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signature, connectionId, bucket, norm]);
+}
+
+/**
+ * Per-row pending status. Files match exactly on key; folders aggregate
+ * every active upload whose key sits under the prefix. Returns `undefined`
+ * when `enabled` is false — that's the cheap path for non-pending rows so
+ * progress ticks don't force every visible row through this scan.
+ */
+export function usePendingByEntryId(
+  connectionId: string,
+  bucket: string,
+  entryId: string,
+  enabled: boolean
+): PendingInfo | undefined {
+  return useUploadsStore(
+    useShallow((s): PendingInfo | undefined => {
+      if (!enabled) return undefined;
+      const isFolder = entryId.endsWith("/");
+      if (!isFolder) {
+        for (const id of s.order) {
+          const it = s.items[id];
+          if (!it) continue;
+          if (it.connectionId !== connectionId) continue;
+          if (it.bucket !== bucket) continue;
+          if (it.key !== entryId) continue;
+          if (!ACTIVE_PENDING_STATUSES.has(it.status)) continue;
+          return {
+            kind: "file",
+            uploadId: it.id,
+            status: it.status as PendingFileInfo["status"],
+            bytesUploaded: it.bytesUploaded,
+            size: it.size,
+            lastError: it.lastError,
+            indeterminate: it.strategy === "server-stream",
+          };
+        }
+        return undefined;
+      }
+      let fileCount = 0;
+      let totalBytes = 0;
+      let bytesUploaded = 0;
+      let anyFailed = false;
+      let anyUploading = false;
+      for (const id of s.order) {
+        const it = s.items[id];
+        if (!it) continue;
+        if (it.connectionId !== connectionId) continue;
+        if (it.bucket !== bucket) continue;
+        if (!it.key.startsWith(entryId)) continue;
+        if (!ACTIVE_PENDING_STATUSES.has(it.status)) continue;
+        fileCount += 1;
+        totalBytes += it.size;
+        bytesUploaded += it.bytesUploaded;
+        if (it.status === "failed") anyFailed = true;
+        if (it.status === "uploading") anyUploading = true;
+      }
+      if (fileCount === 0) return undefined;
+      return {
+        kind: "folder",
+        fileCount,
+        totalBytes,
+        bytesUploaded,
+        anyFailed,
+        anyUploading,
+      };
+    })
+  );
 }

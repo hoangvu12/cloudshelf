@@ -53,6 +53,9 @@ const PREFETCH_THRESHOLD = 5;
 function ObjectListImpl({
   visible,
   currentPrefix,
+  connectionId,
+  bucket,
+  pendingIds,
   sortKey,
   sortDir,
   onSortChange,
@@ -66,6 +69,9 @@ function ObjectListImpl({
 }: {
   visible: S3Entry[];
   currentPrefix: string;
+  connectionId: string;
+  bucket: string;
+  pendingIds: ReadonlySet<string>;
   sortKey: ObjectSortKey;
   sortDir: SortDirection;
   onSortChange: (key: ObjectSortKey) => void;
@@ -120,6 +126,7 @@ function ObjectListImpl({
     <ObjectListContextMenu visible={visible} onAction={onContextAction}>
       <Header
         visible={visible}
+        pendingIds={pendingIds}
         sortKey={sortKey}
         sortDir={sortDir}
         onSortChange={onSortChange}
@@ -161,6 +168,9 @@ function ObjectListImpl({
                 <ObjectRow
                   entry={entry}
                   currentPrefix={currentPrefix}
+                  connectionId={connectionId}
+                  bucket={bucket}
+                  isPending={pendingIds.has(entryId(entry))}
                   compact={density === "compact"}
                   onSelectRow={onSelectRow}
                   onOpen={onOpen}
@@ -200,23 +210,38 @@ function LoaderRow({ loading }: { loading: boolean }) {
  */
 function Header({
   visible,
+  pendingIds,
   sortKey,
   sortDir,
   onSortChange,
   onSelectAll,
 }: {
   visible: S3Entry[];
+  pendingIds: ReadonlySet<string>;
   sortKey: ObjectSortKey;
   sortDir: SortDirection;
   onSortChange: (key: ObjectSortKey) => void;
   onSelectAll: (visible: S3Entry[]) => void;
 }) {
   const headerState = useSelectionStore((s) => {
-    if (visible.length === 0) return "none" as const;
+    // Pending rows aren't selectable — exclude them so "all selected" can
+    // actually be reached while uploads are in flight.
+    const total =
+      pendingIds.size === 0
+        ? visible.length
+        : visible.reduce(
+            (n, e) => (pendingIds.has(entryId(e)) ? n : n + 1),
+            0
+          );
+    if (total === 0) return "none" as const;
     let count = 0;
-    for (const e of visible) if (s.selected.has(entryId(e))) count += 1;
+    for (const e of visible) {
+      const id = entryId(e);
+      if (pendingIds.has(id)) continue;
+      if (s.selected.has(id)) count += 1;
+    }
     if (count === 0) return "none" as const;
-    if (count === visible.length) return "all" as const;
+    if (count === total) return "all" as const;
     return "some" as const;
   });
 

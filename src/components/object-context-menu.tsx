@@ -67,6 +67,13 @@ export function ObjectListContextMenu({
       e.preventDefault();
       return;
     }
+    // Pending-upload rows are non-interactive: their entry is synthetic
+    // (or about to be overwritten), so download / preview / rename would
+    // be confusing.
+    if (el.getAttribute("data-pending") === "true") {
+      e.preventDefault();
+      return;
+    }
     const id = el.getAttribute("data-entry-id");
     const found = id
       ? visibleRef.current.find((v) => entryId(v) === id)

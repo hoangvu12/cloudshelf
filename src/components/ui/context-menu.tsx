@@ -63,7 +63,7 @@ function ContextMenuItem({
       // works because arrow keys go through roving focus, not pointermove.
       onPointerMove={(e) => e.preventDefault()}
       className={cn(
-        "focus:bg-accent focus:text-accent-foreground hover:bg-accent hover:text-accent-foreground relative flex cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-hidden select-none",
+        "focus:bg-accent focus:text-accent-foreground hover:bg-accent hover:text-accent-foreground relative flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-hidden select-none",
         "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
         "data-[variant=destructive]:text-destructive data-[variant=destructive]:focus:bg-destructive/15 data-[variant=destructive]:focus:text-destructive data-[variant=destructive]:hover:bg-destructive/15 data-[variant=destructive]:hover:text-destructive",
         "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",

@@ -56,12 +56,21 @@ import { useSelectionStore } from "@/stores/selection";
 import { usePreviewStore } from "@/stores/preview";
 import { usePrefsStore } from "@/stores/prefs";
 import { useShareStore } from "@/stores/share";
-import { onUploadCompleted, useUploadsStore } from "@/stores/uploads";
+import {
+  onUploadCompleted,
+  usePendingEntriesForPrefix,
+  useUploadsStore,
+} from "@/stores/uploads";
 import type { S3Entry, S3ObjectEntry } from "@server/types";
 
 /** S3's per-object size ceiling. The worker auto-splits anything over the
  *  multipart threshold so we don't need a separate single-PUT cap. */
 const MAX_UPLOAD_BYTES = 5 * 1024 ** 4;
+
+/** Shared empty Set so the pendingIds memo can return a stable identity
+ *  on the common (no-uploads-in-flight) path — keeps memoized consumers
+ *  from re-running. */
+const EMPTY_PENDING_IDS: ReadonlySet<string> = new Set();
 
 /**
  * The object browser screen: breadcrumb + morphing toolbar + virtualized list,
@@ -148,9 +157,65 @@ export function ObjectBrowser({
     [query.data]
   );
 
+  // Synthetic entries for in-flight uploads so the user sees their files
+  // appear in the list immediately, before the post-upload listener
+  // invalidates the query. Real S3 entries always win on dedupe — when the
+  // refetch lands, the synthetic row falls away cleanly.
+  const pendingFromUploads = usePendingEntriesForPrefix(
+    connectionId,
+    bucket,
+    prefix
+  );
+
+  const mergedEntries = React.useMemo<S3Entry[]>(() => {
+    if (
+      pendingFromUploads.files.length === 0 &&
+      pendingFromUploads.folders.length === 0
+    ) {
+      return entries;
+    }
+    const existingKeys = new Set<string>();
+    const existingPrefixes = new Set<string>();
+    for (const e of entries) {
+      if (e.type === "object") existingKeys.add(e.key);
+      else existingPrefixes.add(e.prefix);
+    }
+    const result: S3Entry[] = [...entries];
+    for (const f of pendingFromUploads.files) {
+      if (!existingKeys.has(f.key)) result.push(f);
+    }
+    for (const d of pendingFromUploads.folders) {
+      if (!existingPrefixes.has(d.prefix)) result.push(d);
+    }
+    return result;
+  }, [entries, pendingFromUploads]);
+
+  // entryIds that should render with the pending decoration. Files always
+  // get it (so an in-flight overwrite shows progress on the existing row).
+  // Folders only get it when synthetic — a real folder that happens to
+  // contain pending children stays unadorned.
+  const pendingIds = React.useMemo<ReadonlySet<string>>(() => {
+    if (
+      pendingFromUploads.files.length === 0 &&
+      pendingFromUploads.folders.length === 0
+    ) {
+      return EMPTY_PENDING_IDS;
+    }
+    const existingPrefixes = new Set<string>();
+    for (const e of entries) {
+      if (e.type === "prefix") existingPrefixes.add(e.prefix);
+    }
+    const s = new Set<string>();
+    for (const f of pendingFromUploads.files) s.add(f.key);
+    for (const d of pendingFromUploads.folders) {
+      if (!existingPrefixes.has(d.prefix)) s.add(d.prefix);
+    }
+    return s;
+  }, [pendingFromUploads, entries]);
+
   const visible = React.useMemo(
-    () => sortAndFilterEntries(entries, prefix, filter, sortKey, sortDir),
-    [entries, prefix, filter, sortKey, sortDir]
+    () => sortAndFilterEntries(mergedEntries, prefix, filter, sortKey, sortDir),
+    [mergedEntries, prefix, filter, sortKey, sortDir]
   );
   // Same trick as anchorRef: shift-click range math needs `visible` in the
   // current visible order, but the callback can't take it as a dep without
@@ -179,6 +244,10 @@ export function ObjectBrowser({
   selectedIdsRef.current = selectedIds;
   const sortKeyRef = React.useRef(sortKey);
   sortKeyRef.current = sortKey;
+  // pending rows are non-selectable: ⌘A / shift-click range / arrow nav all
+  // read this ref to skip over them.
+  const pendingIdsRef = React.useRef(pendingIds);
+  pendingIdsRef.current = pendingIds;
 
   const totalBytes = entries.reduce(
     (sum, e) => sum + (e.type === "object" ? e.size : 0),
@@ -253,7 +322,15 @@ export function ObjectBrowser({
         const b = ids.indexOf(id);
         if (a >= 0 && b >= 0) {
           const [from, to] = a < b ? [a, b] : [b, a];
-          setManySelected(ids.slice(from, to + 1));
+          // Drop pending rows that fall inside the range — they're not
+          // selectable (no real S3 entry yet).
+          const pending = pendingIdsRef.current;
+          const sliced = ids.slice(from, to + 1);
+          setManySelected(
+            pending.size === 0
+              ? sliced
+              : sliced.filter((sid) => !pending.has(sid))
+          );
           // Anchor intentionally stays — next shift-click re-extends from it.
           return;
         }
@@ -270,8 +347,13 @@ export function ObjectBrowser({
   const handleSelectAll = React.useCallback(
     (vis: S3Entry[]) => {
       const sel = selectedIdsRef.current;
-      const ids = vis.map(entryId);
-      const allSelected = ids.every((id) => sel.has(id));
+      const pending = pendingIdsRef.current;
+      // Pending rows aren't selectable; "select all" means all real entries.
+      const ids =
+        pending.size === 0
+          ? vis.map(entryId)
+          : vis.map(entryId).filter((id) => !pending.has(id));
+      const allSelected = ids.length > 0 && ids.every((id) => sel.has(id));
       if (allSelected) {
         clearSelection();
         setAnchor(null);
@@ -863,9 +945,17 @@ export function ObjectBrowser({
 
       const vis = visibleRef.current;
       if (vis.length === 0) return;
+      // Arrow nav skips pending rows — landing on a non-selectable row
+      // would put the anchor somewhere selection can't act on.
+      const pending = pendingIdsRef.current;
+      const selectableVis =
+        pending.size === 0
+          ? vis
+          : vis.filter((entry) => !pending.has(entryId(entry)));
+      if (selectableVis.length === 0) return;
       e.preventDefault();
 
-      const ids = vis.map(entryId);
+      const ids = selectableVis.map(entryId);
       const cursor = anchorRef.current;
       const cursorIdx = cursor ? ids.indexOf(cursor) : -1;
       const nextIdx =
@@ -1001,6 +1091,9 @@ export function ObjectBrowser({
         entries={entries}
         visible={visible}
         prefix={prefix}
+        connectionId={connectionId}
+        bucket={bucket}
+        pendingIds={pendingIds}
         sortKey={sortKey}
         sortDir={sortDir}
         onSortChange={handleSortChange}
@@ -1102,6 +1195,9 @@ function BrowserBody({
   entries,
   visible,
   prefix,
+  connectionId,
+  bucket,
+  pendingIds,
   sortKey,
   sortDir,
   onSortChange,
@@ -1115,6 +1211,9 @@ function BrowserBody({
   entries: S3Entry[];
   visible: S3Entry[];
   prefix: string;
+  connectionId: string;
+  bucket: string;
+  pendingIds: ReadonlySet<string>;
   sortKey: ObjectSortKey;
   sortDir: SortDirection;
   onSortChange: (key: ObjectSortKey) => void;
@@ -1155,7 +1254,7 @@ function BrowserBody({
     );
   }
 
-  if (entries.length === 0) {
+  if (entries.length === 0 && pendingIds.size === 0) {
     return (
       <EmptyState
         icon={<FolderX />}
@@ -1179,6 +1278,9 @@ function BrowserBody({
     <BodyRenderer
       visible={visible}
       currentPrefix={prefix}
+      connectionId={connectionId}
+      bucket={bucket}
+      pendingIds={pendingIds}
       sortKey={sortKey}
       sortDir={sortDir}
       onSortChange={onSortChange}
@@ -1196,6 +1298,9 @@ function BrowserBody({
 function BodyRenderer(props: {
   visible: S3Entry[];
   currentPrefix: string;
+  connectionId: string;
+  bucket: string;
+  pendingIds: ReadonlySet<string>;
   sortKey: ObjectSortKey;
   sortDir: SortDirection;
   onSortChange: (key: ObjectSortKey) => void;
@@ -1213,6 +1318,9 @@ function BodyRenderer(props: {
       <ObjectGrid
         visible={props.visible}
         currentPrefix={props.currentPrefix}
+        connectionId={props.connectionId}
+        bucket={props.bucket}
+        pendingIds={props.pendingIds}
         onSelectRow={props.onSelectRow}
         onOpen={props.onOpen}
         onContextAction={props.onContextAction}
