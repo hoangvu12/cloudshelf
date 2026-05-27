@@ -7,65 +7,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-
-/**
- * Single source of truth for the keyboard-shortcut catalogue. The settings
- * page and the `?` help dialog both render from this list, so adding a new
- * shortcut here keeps both surfaces in sync.
- *
- * The strings are intentionally Mac-flavored (⌘/⇧). On Windows/Linux the
- * runtime listeners accept Ctrl as an alias for ⌘; we don't bother
- * platform-switching the display because most users recognize both.
- */
-export const SHORTCUTS: { keys: React.ReactNode; action: string }[] = [
-  { keys: <KeyCombo keys={["⌘", "K"]} />, action: "Global search" },
-  { keys: <KeyCombo keys={["⌘", "U"]} />, action: "Upload files" },
-  { keys: <KeyCombo keys={["⌘", "⇧", "N"]} />, action: "New bucket / New folder" },
-  {
-    keys: (
-      <>
-        <Kbd>⌫</Kbd> or <Kbd>Del</Kbd>
-      </>
-    ),
-    action: "Delete selected items",
-  },
-  { keys: <KeyCombo keys={["⌘", "A"]} />, action: "Select all in view" },
-  {
-    keys: (
-      <>
-        <Kbd>J</Kbd> / <Kbd>K</Kbd> or <Kbd>↓</Kbd> / <Kbd>↑</Kbd>
-      </>
-    ),
-    action: "Navigate list up/down",
-  },
-  { keys: <Kbd>Space</Kbd>, action: "Toggle preview sidebar" },
-  { keys: <Kbd>/</Kbd>, action: "Focus filter" },
-  { keys: <Kbd>F2</Kbd>, action: "Rename selected item" },
-  { keys: <KeyCombo keys={["⌘", "C"]} />, action: "Copy public link" },
-  { keys: <Kbd>?</Kbd>, action: "Show all shortcuts" },
-  { keys: <Kbd>Esc</Kbd>, action: "Close modals / Clear selection" },
-];
-
-export function Kbd({ children }: { children: React.ReactNode }) {
-  return (
-    <kbd className="bg-card border-surface-1 text-foreground inline-block rounded border border-b-2 px-1.5 py-0.5 font-mono text-[11px] shadow-sm">
-      {children}
-    </kbd>
-  );
-}
-
-export function KeyCombo({ keys }: { keys: string[] }) {
-  return (
-    <>
-      {keys.map((k, i) => (
-        <React.Fragment key={i}>
-          {i > 0 && <span className="text-muted-foreground mx-1 text-xs">+</span>}
-          <Kbd>{k}</Kbd>
-        </React.Fragment>
-      ))}
-    </>
-  );
-}
+import { isEditableTarget } from "@/lib/editable-target";
+import { Kbd } from "@/lib/kbd";
+import { SHORTCUTS } from "@/lib/shortcuts-data";
 
 /**
  * Help modal rendered by the global `?` shortcut. Mirrors the layout of
@@ -93,9 +37,9 @@ export function ShortcutsDialog({
             <div>Action</div>
           </div>
           <div className="divide-border/50 divide-y text-sm">
-            {SHORTCUTS.map((s, i) => (
+            {SHORTCUTS.map((s) => (
               <div
-                key={i}
+                key={s.action}
                 className="hover:bg-muted/20 grid grid-cols-2 items-center p-3"
               >
                 <div className="flex items-center gap-1">{s.keys}</div>
@@ -127,10 +71,4 @@ export function useShortcutsHelp(): [boolean, (open: boolean) => void] {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
   return [open, setOpen];
-}
-
-export function isEditableTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false;
-  const tag = target.tagName;
-  return tag === "INPUT" || tag === "TEXTAREA" || target.isContentEditable;
 }

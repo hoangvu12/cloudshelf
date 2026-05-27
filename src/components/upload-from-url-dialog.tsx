@@ -44,27 +44,44 @@ export function UploadFromUrlDialog({
   bucket: string;
   prefix: string;
 }) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        {open && (
+          <UploadFromUrlForm
+            connectionId={connectionId}
+            bucket={bucket}
+            prefix={prefix}
+            onDone={() => onOpenChange(false)}
+          />
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function UploadFromUrlForm({
+  connectionId,
+  bucket,
+  prefix,
+  onDone,
+}: {
+  connectionId: string;
+  bucket: string;
+  prefix: string;
+  onDone: () => void;
+}) {
   const [url, setUrl] = React.useState("");
-  const [filename, setFilename] = React.useState("");
-  // Tracks whether the user has manually typed in the filename field. While
-  // false the field tracks the URL's last path segment automatically; once
-  // edited we leave it alone so the user's choice survives further URL tweaks.
-  const [filenameDirty, setFilenameDirty] = React.useState(false);
+  // `null` while the field tracks the URL's basename automatically; an explicit
+  // string once the user has typed in the field, so their choice survives
+  // further URL tweaks.
+  const [overrideFilename, setOverrideFilename] = React.useState<string | null>(
+    null
+  );
+  const urlId = React.useId();
+  const filenameId = React.useId();
 
-  React.useEffect(() => {
-    if (!open) return;
-    setUrl("");
-    setFilename("");
-    setFilenameDirty(false);
-  }, [open]);
-
-  // Auto-populate the filename from the URL's basename until the user edits
-  // the field. The toLocaleString-style URL parse handles "?query" + "#hash"
-  // correctly; we strip both and percent-decode the last path segment.
-  React.useEffect(() => {
-    if (filenameDirty) return;
-    setFilename(deriveFilenameFromUrl(url));
-  }, [url, filenameDirty]);
+  const filename = overrideFilename ?? deriveFilenameFromUrl(url);
 
   const upload = useUploadFromUrl(connectionId, bucket);
   const addServerUpload = useUploadsStore((s) => s.actions.addServerUpload);
@@ -95,7 +112,7 @@ export function UploadFromUrlDialog({
       key,
       fileName: trimmedFilename,
     });
-    onOpenChange(false);
+    onDone();
 
     // Preflight (HEAD against the upstream URL) runs in parallel — purely
     // cosmetic, fills in real size + contentType on the panel row so it
@@ -127,78 +144,77 @@ export function UploadFromUrlDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Upload from URL</DialogTitle>
-          <DialogDescription className="font-mono text-xs">
-            Server streams the URL into <code>{prefix || "/"}</code>.
-          </DialogDescription>
-        </DialogHeader>
+    <>
+      <DialogHeader>
+        <DialogTitle>Upload from URL</DialogTitle>
+        <DialogDescription className="font-mono text-xs">
+          Server streams the URL into <code>{prefix || "/"}</code>.
+        </DialogDescription>
+      </DialogHeader>
 
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            handleSubmit();
-          }}
-          className="space-y-4"
-        >
-          <div>
-            <label className="text-muted-foreground mb-2 block font-mono text-[10px] tracking-wider uppercase">
-              URL
-            </label>
-            <div className="relative">
-              <LinkIcon className="text-muted-foreground absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2" />
-              <Input
-                autoFocus
-                type="url"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                placeholder="https://example.com/image.png"
-                className="h-9 pl-8 font-mono text-[11px]"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="text-muted-foreground mb-2 block font-mono text-[10px] tracking-wider uppercase">
-              Filename
-            </label>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          handleSubmit();
+        }}
+        className="space-y-4"
+      >
+        <div>
+          <label
+            htmlFor={urlId}
+            className="text-muted-foreground mb-2 block font-mono text-[10px] tracking-wider uppercase"
+          >
+            URL
+          </label>
+          <div className="relative">
+            <LinkIcon className="text-muted-foreground absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2" />
             <Input
-              type="text"
-              value={filename}
-              onChange={(e) => {
-                setFilename(e.target.value);
-                setFilenameDirty(true);
-              }}
-              placeholder="image.png"
-              className="h-9 font-mono text-[11px]"
+              id={urlId}
+              autoFocus
+              type="url"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder="https://example.com/image.png"
+              className="h-9 pl-8 font-mono text-[11px]"
             />
-            <p className="text-muted-foreground mt-1.5 font-mono text-[10px] break-all">
-              Lands at <code>{prefix || ""}{trimmedFilename || "…"}</code>
-            </p>
           </div>
+        </div>
 
-          <p className="text-muted-foreground font-mono text-[10px] leading-relaxed">
-            Only http(s) URLs. Internal hosts (localhost, 127.0.0.1, RFC1918)
-            are refused. Hard cap: 1 GB per upload.
+        <div>
+          <label
+            htmlFor={filenameId}
+            className="text-muted-foreground mb-2 block font-mono text-[10px] tracking-wider uppercase"
+          >
+            Filename
+          </label>
+          <Input
+            id={filenameId}
+            type="text"
+            value={filename}
+            onChange={(e) => setOverrideFilename(e.target.value)}
+            placeholder="image.png"
+            className="h-9 font-mono text-[11px]"
+          />
+          <p className="text-muted-foreground mt-1.5 font-mono text-[10px] break-all">
+            Lands at <code>{prefix || ""}{trimmedFilename || "…"}</code>
           </p>
+        </div>
 
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={!canSubmit}>
-              Upload
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+        <p className="text-muted-foreground font-mono text-[10px] leading-relaxed">
+          Only http(s) URLs. Internal hosts (localhost, 127.0.0.1, RFC1918)
+          are refused. Hard cap: 1 GB per upload.
+        </p>
+
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={onDone}>
+            Cancel
+          </Button>
+          <Button type="submit" disabled={!canSubmit}>
+            Upload
+          </Button>
+        </DialogFooter>
+      </form>
+    </>
   );
 }
 

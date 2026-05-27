@@ -265,15 +265,15 @@ export function FilePreviewDrawer({
 }
 
 function useIsNarrowViewport(): boolean {
-  const [narrow, setNarrow] = React.useState(false);
-  React.useEffect(() => {
-    const mql = window.matchMedia("(max-width: 1023.98px)");
-    const update = () => setNarrow(mql.matches);
-    update();
-    mql.addEventListener("change", update);
-    return () => mql.removeEventListener("change", update);
-  }, []);
-  return narrow;
+  return React.useSyncExternalStore(
+    (cb) => {
+      const mql = window.matchMedia("(max-width: 1023.98px)");
+      mql.addEventListener("change", cb);
+      return () => mql.removeEventListener("change", cb);
+    },
+    () => window.matchMedia("(max-width: 1023.98px)").matches,
+    () => false
+  );
 }
 
 function PreviewBody({
@@ -332,6 +332,7 @@ function PreviewBody({
       />
 
       <MetadataSection
+        key={`metadata:${objectKey}`}
         connectionId={connectionId}
         bucket={bucket}
         objectKey={objectKey}
@@ -341,6 +342,7 @@ function PreviewBody({
       />
 
       <TagsSection
+        key={`tags:${objectKey}`}
         connectionId={connectionId}
         bucket={bucket}
         objectKey={objectKey}
@@ -407,20 +409,28 @@ function MetadataSection({
   loading: boolean;
   error: Error | null;
 }) {
-  const [rows, setRows] = React.useState<{ key: string; value: string }[]>([]);
+  // Component is keyed by objectKey at the call site, so it remounts on
+  // prev/next — no need to reset when the key changes. Seed once during the
+  // first render that has HEAD data; later updates to the same HEAD are
+  // ignored so user edits aren't clobbered.
+  const seededRef = React.useRef(false);
+  const [rows, setRows] = React.useState<
+    { id: string; key: string; value: string }[]
+  >([]);
   const [contentType, setContentType] = React.useState("");
   const [dirty, setDirty] = React.useState(false);
 
-  // Seed once when HEAD arrives, and reset whenever the key changes — prev/next
-  // walks should never carry one file's edits onto another.
-  React.useEffect(() => {
-    if (!head) return;
+  if (head && !seededRef.current) {
+    seededRef.current = true;
     setRows(
-      Object.entries(head.userMetadata).map(([key, value]) => ({ key, value }))
+      Object.entries(head.userMetadata).map(([key, value]) => ({
+        id: crypto.randomUUID(),
+        key,
+        value,
+      }))
     );
     setContentType(head.contentType ?? "");
-    setDirty(false);
-  }, [head, objectKey]);
+  }
 
   const update = useUpdateObjectMetadata(connectionId, bucket, {
     onSuccess: () => {
@@ -451,18 +461,19 @@ function MetadataSection({
     );
   }
 
-  const setRow = (i: number, patch: Partial<{ key: string; value: string }>) => {
-    setRows((prev) =>
-      prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r))
-    );
+  const setRow = (id: string, patch: Partial<{ key: string; value: string }>) => {
+    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
     setDirty(true);
   };
-  const removeRow = (i: number) => {
-    setRows((prev) => prev.filter((_, idx) => idx !== i));
+  const removeRow = (id: string) => {
+    setRows((prev) => prev.filter((r) => r.id !== id));
     setDirty(true);
   };
   const addRow = () => {
-    setRows((prev) => [...prev, { key: "", value: "" }]);
+    setRows((prev) => [
+      ...prev,
+      { id: crypto.randomUUID(), key: "", value: "" },
+    ]);
     setDirty(true);
   };
 
@@ -501,25 +512,25 @@ function MetadataSection({
           <FieldLabel>Custom headers</FieldLabel>
           {rows.length > 0 && (
             <div className="space-y-2">
-              {rows.map((r, i) => (
-                <div key={i} className="flex items-center gap-2">
+              {rows.map((r) => (
+                <div key={r.id} className="flex items-center gap-2">
                   <Input
                     className="h-9 flex-1 text-[11px]"
                     placeholder="key"
                     value={r.key}
-                    onChange={(e) => setRow(i, { key: e.target.value })}
+                    onChange={(e) => setRow(r.id, { key: e.target.value })}
                   />
                   <Input
                     className="h-9 flex-1 text-[11px]"
                     placeholder="value"
                     value={r.value}
-                    onChange={(e) => setRow(i, { value: e.target.value })}
+                    onChange={(e) => setRow(r.id, { value: e.target.value })}
                   />
                   <Button
                     size="icon-sm"
                     variant="ghost"
                     aria-label="Remove row"
-                    onClick={() => removeRow(i)}
+                    onClick={() => removeRow(r.id)}
                   >
                     <X className="size-3" />
                   </Button>
@@ -560,14 +571,18 @@ function TagsSection({
   objectKey: string;
 }) {
   const tagsQuery = useObjectTags(connectionId, bucket, objectKey);
-  const [rows, setRows] = React.useState<ObjectTag[]>([]);
+  // Component is keyed by objectKey at the call site, so it remounts on
+  // prev/next — seed once when tags arrive and let local edits stay sticky.
+  const seededRef = React.useRef(false);
+  const [rows, setRows] = React.useState<(ObjectTag & { id: string })[]>([]);
   const [dirty, setDirty] = React.useState(false);
 
-  React.useEffect(() => {
-    if (!tagsQuery.data) return;
-    setRows(tagsQuery.data.tags);
-    setDirty(false);
-  }, [tagsQuery.data, objectKey]);
+  if (tagsQuery.data && !seededRef.current) {
+    seededRef.current = true;
+    setRows(
+      tagsQuery.data.tags.map((t) => ({ ...t, id: crypto.randomUUID() }))
+    );
+  }
 
   const put = usePutObjectTags(connectionId, bucket, {
     onSuccess: () => {
@@ -608,19 +623,20 @@ function TagsSection({
     );
   }
 
-  const setRow = (i: number, patch: Partial<ObjectTag>) => {
-    setRows((prev) =>
-      prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r))
-    );
+  const setRow = (id: string, patch: Partial<ObjectTag>) => {
+    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
     setDirty(true);
   };
-  const removeRow = (i: number) => {
-    setRows((prev) => prev.filter((_, idx) => idx !== i));
+  const removeRow = (id: string) => {
+    setRows((prev) => prev.filter((r) => r.id !== id));
     setDirty(true);
   };
   const addRow = () => {
     if (rows.length >= MAX_TAGS) return;
-    setRows((prev) => [...prev, { key: "", value: "" }]);
+    setRows((prev) => [
+      ...prev,
+      { id: crypto.randomUUID(), key: "", value: "" },
+    ]);
     setDirty(true);
   };
 
@@ -643,27 +659,27 @@ function TagsSection({
       <SectionBody>
         {rows.length > 0 && (
           <div className="space-y-2">
-            {rows.map((r, i) => (
-              <div key={i} className="flex items-center gap-2">
+            {rows.map((r) => (
+              <div key={r.id} className="flex items-center gap-2">
                 <Input
                   className="h-9 flex-1 text-[11px]"
                   placeholder="key"
                   maxLength={MAX_TAG_KEY}
                   value={r.key}
-                  onChange={(e) => setRow(i, { key: e.target.value })}
+                  onChange={(e) => setRow(r.id, { key: e.target.value })}
                 />
                 <Input
                   className="h-9 flex-1 text-[11px]"
                   placeholder="value"
                   maxLength={MAX_TAG_VALUE}
                   value={r.value}
-                  onChange={(e) => setRow(i, { value: e.target.value })}
+                  onChange={(e) => setRow(r.id, { value: e.target.value })}
                 />
                 <Button
                   size="icon-sm"
                   variant="ghost"
                   aria-label="Remove tag"
-                  onClick={() => removeRow(i)}
+                  onClick={() => removeRow(r.id)}
                 >
                   <X className="size-3" />
                 </Button>
@@ -1124,7 +1140,7 @@ function ShellLoading() {
   return (
     <div className="text-muted-foreground flex items-center gap-2 py-2">
       <Loader2 className="size-3.5 animate-spin" />
-      Loading...
+      Loading…
     </div>
   );
 }
@@ -1174,7 +1190,7 @@ function PreviewMedia({
     return (
       <MediaShell>
         <Loader2 className="size-6 animate-spin" />
-        <span className="font-mono text-[10px]">Loading preview...</span>
+        <span className="font-mono text-[10px]">Loading preview…</span>
       </MediaShell>
     );
   }
@@ -1202,7 +1218,7 @@ function PreviewMedia({
     case "pdf":
       return <PdfPreview url={url} />;
     case "text":
-      return <TextPreview url={url} name={name} size={size} />;
+      return <TextPreview key={url} url={url} name={name} size={size} />;
   }
 }
 
@@ -1235,8 +1251,13 @@ function MediaShell({
 }
 
 function ImagePreview({ url }: { url: string }) {
+  // Reset error state when the URL changes via `key`-based remount; the
+  // caller doesn't need to do anything special — React replaces the subtree.
+  return <ImagePreviewInner key={url} url={url} />;
+}
+
+function ImagePreviewInner({ url }: { url: string }) {
   const [errored, setErrored] = React.useState(false);
-  React.useEffect(() => setErrored(false), [url]);
 
   if (errored) {
     return (
@@ -1261,14 +1282,17 @@ function ImagePreview({ url }: { url: string }) {
 
 function VideoPreview({ url }: { url: string }) {
   return (
-    <div className="border-border border-b bg-black">
+    <div className="border-border border-b bg-neutral-950">
       <video
         key={url}
         src={url}
         controls
         preload="metadata"
+        aria-label="Video preview"
         className="block max-h-[60vh] w-full"
-      />
+      >
+        <track kind="captions" />
+      </video>
     </div>
   );
 }
@@ -1276,7 +1300,16 @@ function VideoPreview({ url }: { url: string }) {
 function AudioPreview({ url }: { url: string }) {
   return (
     <div className="border-border bg-card/40 flex h-32 items-center justify-center border-b px-4">
-      <audio key={url} src={url} controls preload="metadata" className="w-full" />
+      <audio
+        key={url}
+        src={url}
+        controls
+        preload="metadata"
+        aria-label="Audio preview"
+        className="w-full"
+      >
+        <track kind="captions" />
+      </audio>
     </div>
   );
 }
@@ -1288,6 +1321,7 @@ function PdfPreview({ url }: { url: string }) {
         key={url}
         src={url}
         title="PDF preview"
+        sandbox=""
         className="block h-[70vh] w-full border-0"
       />
     </div>
@@ -1326,11 +1360,10 @@ function TextPreview({
 
   const lang = React.useMemo(() => shikiLangFor(name), [name]);
 
+  // Component is keyed by url at the call site, so it remounts on prev/next —
+  // initial state is "loading", no reset needed when url changes mid-render.
   React.useEffect(() => {
     let cancelled = false;
-    setState({ kind: "loading" });
-    setTokens(null);
-
     const willTruncate =
       typeof size === "number" && size > TEXT_PREVIEW_BYTES;
 
@@ -1394,7 +1427,7 @@ function TextPreview({
     return (
       <MediaShell>
         <Loader2 className="size-6 animate-spin" />
-        <span className="font-mono text-[10px]">Loading text...</span>
+        <span className="font-mono text-[10px]">Loading text…</span>
       </MediaShell>
     );
   }
@@ -1414,7 +1447,7 @@ function TextPreview({
       {highlighting && lang && (
         <div className="border-border text-muted-foreground bg-card/60 flex items-center gap-1.5 border-t px-3 py-1.5 font-mono text-[10px]">
           <Loader2 className="size-3 animate-spin" />
-          Highlighting...
+          Highlighting…
         </div>
       )}
       {state.truncated && (
@@ -1537,25 +1570,32 @@ function renderTokenLine(tokens: ThemedToken[]): React.ReactNode {
 
   if (total === 0) return " ";
   if (total <= MAX_LINE_CHARS) {
-    return tokens.map((t, i) => (
-      <span key={i} style={tokenStyle(t)}>
-        {t.content}
-      </span>
-    ));
+    let offset = 0;
+    return tokens.map((t) => {
+      const key = `${offset}:${t.content.length}`;
+      offset += t.content.length;
+      return (
+        <span key={key} style={tokenStyle(t)}>
+          {t.content}
+        </span>
+      );
+    });
   }
 
   // Slice token-by-token until we hit the per-line cap, then append a marker.
   let remaining = MAX_LINE_CHARS;
+  let offset = 0;
   const spans: React.ReactNode[] = [];
   for (let i = 0; i < tokens.length && remaining > 0; i++) {
     const t = tokens[i]!;
     const slice =
       t.content.length > remaining ? t.content.slice(0, remaining) : t.content;
     spans.push(
-      <span key={i} style={tokenStyle(t)}>
+      <span key={`${offset}:${slice.length}`} style={tokenStyle(t)}>
         {slice}
       </span>
     );
+    offset += slice.length;
     remaining -= slice.length;
   }
   spans.push(<TruncatedMarker key="trunc" extra={total - MAX_LINE_CHARS} />);

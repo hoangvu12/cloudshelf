@@ -41,11 +41,31 @@ export function CreateBucketDialog({
   onSubmit: (name: string) => void;
   pending: boolean;
 }) {
-  const [name, setName] = React.useState("");
-  React.useEffect(() => {
-    if (open) setName("");
-  }, [open]);
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        {open && (
+          <CreateBucketForm
+            pending={pending}
+            onSubmit={onSubmit}
+            onCancel={() => onOpenChange(false)}
+          />
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
 
+function CreateBucketForm({
+  pending,
+  onSubmit,
+  onCancel,
+}: {
+  pending: boolean;
+  onSubmit: (name: string) => void;
+  onCancel: () => void;
+}) {
+  const [name, setName] = React.useState("");
   const trimmed = name.trim();
   // Skip validation while the field is empty so the user doesn't see a red
   // error before they've typed anything.
@@ -54,60 +74,55 @@ export function CreateBucketDialog({
   const canSubmit = !!trimmed && !error && !pending;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>New bucket</DialogTitle>
-          <DialogDescription className="font-mono text-xs">
-            3–63 chars · lowercase letters, digits, hyphens · must start and end
-            with a letter or digit.
-          </DialogDescription>
-        </DialogHeader>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (canSubmit) onSubmit(trimmed);
-          }}
-          className="space-y-3"
-        >
-          <div className="space-y-1.5">
-            <Input
-              autoFocus
-              value={name}
-              onChange={(e) => setName(e.target.value.toLowerCase())}
-              placeholder="my-bucket"
-              aria-invalid={!!error}
-              aria-describedby={error ? "bucket-name-error" : undefined}
-            />
-            {error && (
-              <p
-                id="bucket-name-error"
-                className="text-accent-red font-mono text-[11px]"
-              >
-                {error}
-              </p>
-            )}
-            {warning && (
-              <p className="text-accent-yellow font-mono text-[11px]">
-                {warning}
-              </p>
-            )}
-          </div>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
+    <>
+      <DialogHeader>
+        <DialogTitle>New bucket</DialogTitle>
+        <DialogDescription className="font-mono text-xs">
+          3–63 chars · lowercase letters, digits, hyphens · must start and end
+          with a letter or digit.
+        </DialogDescription>
+      </DialogHeader>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (canSubmit) onSubmit(trimmed);
+        }}
+        className="space-y-3"
+      >
+        <div className="space-y-1.5">
+          <Input
+            autoFocus
+            value={name}
+            onChange={(e) => setName(e.target.value.toLowerCase())}
+            placeholder="my-bucket"
+            aria-label="Bucket name"
+            aria-invalid={!!error}
+            aria-describedby={error ? "bucket-name-error" : undefined}
+          />
+          {error && (
+            <p
+              id="bucket-name-error"
+              className="text-accent-red font-mono text-[11px]"
             >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={!canSubmit}>
-              {pending ? "Creating..." : "Create"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+              {error}
+            </p>
+          )}
+          {warning && (
+            <p className="text-accent-yellow font-mono text-[11px]">
+              {warning}
+            </p>
+          )}
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button type="submit" disabled={!canSubmit}>
+            {pending ? "Creating…" : "Create"}
+          </Button>
+        </DialogFooter>
+      </form>
+    </>
   );
 }
 
@@ -222,7 +237,7 @@ function VersioningToggle({
 
       {!state.error && status === "Suspended" && (
         <div className="text-muted-foreground font-mono text-[10px]">
-          Suspended — existing versions remain, but new writes won't create
+          Suspended: existing versions remain, but new writes won't create
           new versions until you re-enable.
         </div>
       )}

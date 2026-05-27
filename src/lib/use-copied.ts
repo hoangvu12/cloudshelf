@@ -20,8 +20,9 @@ export function useCopied(durationMs = 1500) {
   }, [durationMs]);
 
   React.useEffect(() => {
+    const ref = timerRef;
     return () => {
-      if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+      if (ref.current !== null) window.clearTimeout(ref.current);
     };
   }, []);
 

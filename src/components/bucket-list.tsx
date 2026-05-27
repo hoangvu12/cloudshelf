@@ -117,18 +117,27 @@ function BucketRow({
 
   // Track toggle to fire a brief scale-pop on the pin icons. The animation key
   // changes on every flip after initial mount so the CSS animation re-runs.
+  // Adjusted during render per the "you might not need an effect" pattern.
   const [popKey, setPopKey] = React.useState(0);
   const prevPinned = React.useRef(pinned);
-  React.useEffect(() => {
-    if (prevPinned.current === pinned) return;
+  if (prevPinned.current !== pinned) {
     prevPinned.current = pinned;
     setPopKey((k) => k + 1);
-  }, [pinned]);
+  }
   const popClass = popKey > 0 ? "animate-scale-pop" : "";
 
   return (
     <div
+      role="button"
+      tabIndex={0}
+      aria-label={`Open bucket ${bucket.name}`}
       onClick={() => onOpen?.(bucket.name)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpen?.(bucket.name);
+        }
+      }}
       className={cn(
         "group hover:bg-muted flex cursor-pointer items-center rounded-md px-2",
         density === "compact" ? "py-1" : "py-2"

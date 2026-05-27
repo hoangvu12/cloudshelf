@@ -43,9 +43,12 @@ export function useImageExif(url: string | undefined) {
     queryKey: url ? exifKeys.parsed(url) : ["exif", "none"],
     queryFn: async () => {
       if (!url) throw new Error("no url");
-      const res = await fetch(url, {
-        headers: { Range: `bytes=0-${RANGE_BYTES - 1}` },
-      });
+      // Run the dynamic import in parallel with the range-GET — neither
+      // depends on the other, and exifr is a non-trivial bundle.
+      const [res, { parse }] = await Promise.all([
+        fetch(url, { headers: { Range: `bytes=0-${RANGE_BYTES - 1}` } }),
+        import("exifr"),
+      ]);
       // S3 returns 206 for a satisfied Range; some backends ignore the
       // header and return the whole object as 200. Both are fine — exifr only
       // reads what it needs from the start of the buffer.
@@ -53,7 +56,6 @@ export function useImageExif(url: string | undefined) {
         throw new Error(`HTTP ${res.status}`);
       }
       const buf = await res.arrayBuffer();
-      const { parse } = await import("exifr");
       const data = (await parse(buf)) as ImageExif | undefined;
       return data ?? null;
     },

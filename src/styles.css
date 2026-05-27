@@ -529,20 +529,19 @@
   }
 }
 
-/* Three-cycle bounce — same keyframes as Tailwind's animate-bounce but
-   capped so a long drag-hover doesn't leave the icon jittering forever. */
-@keyframes bounce-3 {
+/* Soft three-cycle lift on the drag-hover badge — gentle ease-out at the top
+   of each arc rather than a hard bounce, capped at 3 cycles so a long drag
+   doesn't leave the icon jittering forever. */
+@keyframes lift-3 {
   0%, 100% {
-    transform: translateY(-25%);
-    animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
+    transform: translateY(0);
   }
   50% {
-    transform: none;
-    animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
+    transform: translateY(-18%);
   }
 }
-@utility animate-bounce-3 {
-  animation: bounce-3 1s ease-in-out 3;
+@utility animate-lift-3 {
+  animation: lift-3 1.1s cubic-bezier(0.22, 1, 0.36, 1) 3;
 }
 
 /* Brief scale-punch — used as inline acknowledgement when a toggle button's

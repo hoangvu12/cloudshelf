@@ -124,18 +124,27 @@ function BucketCard({
   const { Icon, accent } = bucketAppearance(bucket.name);
   const compact = density === "compact";
 
+  // Adjusted during render per the "you might not need an effect" pattern.
   const [popKey, setPopKey] = React.useState(0);
   const prevPinned = React.useRef(pinned);
-  React.useEffect(() => {
-    if (prevPinned.current === pinned) return;
+  if (prevPinned.current !== pinned) {
     prevPinned.current = pinned;
     setPopKey((k) => k + 1);
-  }, [pinned]);
+  }
   const popClass = popKey > 0 ? "animate-scale-pop" : "";
 
   return (
     <div
+      role="button"
+      tabIndex={0}
+      aria-label={`Open bucket ${bucket.name}`}
       onClick={() => onOpen?.(bucket.name)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpen?.(bucket.name);
+        }
+      }}
       className={cn(
         "group bg-card/40 border-border hover:border-primary/60 hover:bg-muted/30 relative flex cursor-pointer flex-col rounded-lg border",
         compact ? "gap-2 p-3" : "gap-3 p-4"

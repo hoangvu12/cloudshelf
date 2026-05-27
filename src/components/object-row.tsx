@@ -1,18 +1,17 @@
 import * as React from "react";
 
-import { Loader2, RotateCw, X, XCircle } from "@/lib/icons";
 import { cn } from "@/lib/utils";
-import { formatBytes, formatFileTime } from "@/lib/format";
 import { fileAppearance } from "@/lib/file-types";
 import { folderIconFor } from "@/lib/folder-icons";
 import { entryDisplayName, entryId } from "@/lib/object-path";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Cell } from "@/components/object-row-cells/cell";
+import { PendingBadge } from "@/components/object-row-cells/pending-badge";
+import { SizeContent } from "@/components/object-row-cells/size-content";
+import { ModifiedContent } from "@/components/object-row-cells/modified-content";
+import { FailedActions } from "@/components/object-row-cells/failed-actions";
 import { useIsSelected } from "@/stores/selection";
-import {
-  usePendingByEntryId,
-  useUploadsStore,
-  type PendingInfo,
-} from "@/stores/uploads";
+import { usePendingByEntryId } from "@/stores/uploads";
 import type { S3Entry } from "@server/types";
 
 /**
@@ -78,7 +77,7 @@ function ObjectRowImpl({
     ? { Icon: folderIconFor(display.replace(/\/$/, "")), color: "", label: "Folder" }
     : fileAppearance(display);
 
-  const handleRowClick = (e: React.MouseEvent) => {
+  const handleRowClick = (e: { shiftKey: boolean; metaKey: boolean; ctrlKey: boolean }) => {
     // Pending rows are non-interactive — the file doesn't exist on S3 yet
     // (or its current bytes are about to be replaced), so opening or
     // selecting it would be confusing.
@@ -99,7 +98,16 @@ function ObjectRowImpl({
 
   return (
     <div
+      role="button"
+      tabIndex={pendingDisplay ? -1 : 0}
+      aria-label={display}
       onClick={handleRowClick}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          handleRowClick(e);
+        }
+      }}
       data-entry-id={id}
       data-pending={pendingDisplay ? "true" : undefined}
       className={cn(
@@ -195,161 +203,3 @@ function ObjectRowImpl({
 }
 
 export const ObjectRow = React.memo(ObjectRowImpl);
-
-function Cell({
-  className,
-  children,
-}: {
-  className?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className={cn("text-muted-foreground font-mono text-xs", className)}>
-      {children}
-    </div>
-  );
-}
-
-/** Status glyph that replaces the checkbox while an upload is in flight.
- *  Uses currentColor so the wrapper's text-* class drives the hue. */
-function PendingBadge({ pending }: { pending: PendingInfo }) {
-  if (pending.kind === "file") {
-    if (pending.status === "failed") {
-      return <XCircle className="text-destructive size-4" />;
-    }
-    if (pending.status === "paused") {
-      return <Loader2 className="text-accent-peach size-4" />;
-    }
-    return <Loader2 className="text-primary-text size-4 animate-spin" />;
-  }
-  if (pending.anyFailed) {
-    return <XCircle className="text-destructive size-4" />;
-  }
-  return <Loader2 className="text-primary-text size-4 animate-spin" />;
-}
-
-function SizeContent({
-  entry,
-  pending,
-  selected,
-}: {
-  entry: S3Entry;
-  pending: PendingInfo | undefined;
-  selected: boolean;
-}) {
-  if (pending?.kind === "file") return <PendingFileMeta pending={pending} />;
-  if (pending?.kind === "folder")
-    return <PendingFolderMeta pending={pending} />;
-  if (entry.type === "prefix") {
-    return <span className={selected ? "text-primary-text" : undefined}>--</span>;
-  }
-  return (
-    <span className={selected ? "text-primary-text" : undefined}>
-      {formatBytes(entry.size)}
-    </span>
-  );
-}
-
-function ModifiedContent({
-  entry,
-  hideForPending,
-}: {
-  entry: S3Entry;
-  hideForPending: boolean;
-}) {
-  if (hideForPending || entry.type === "prefix") return <>--</>;
-  return <>{formatFileTime(entry.lastModified)}</>;
-}
-
-function PendingFileMeta({
-  pending,
-}: {
-  pending: Extract<PendingInfo, { kind: "file" }>;
-}) {
-  if (pending.status === "queued") {
-    return <span className="text-muted-foreground text-[10px] uppercase">Queued</span>;
-  }
-  if (pending.status === "paused") {
-    return <span className="text-accent-peach text-[10px] uppercase">Paused</span>;
-  }
-  if (pending.indeterminate) {
-    return <span className="text-primary-text text-[10px] uppercase">Uploading</span>;
-  }
-  const pct =
-    pending.size > 0 ? (pending.bytesUploaded / pending.size) * 100 : 0;
-  return (
-    <span className="text-primary-text">{Math.min(100, pct).toFixed(0)}%</span>
-  );
-}
-
-function PendingFolderMeta({
-  pending,
-}: {
-  pending: Extract<PendingInfo, { kind: "folder" }>;
-}) {
-  return (
-    <span className="text-muted-foreground text-[10px] uppercase">
-      {pending.fileCount} file{pending.fileCount === 1 ? "" : "s"}
-    </span>
-  );
-}
-
-/** Retry + dismiss buttons that replace the size/type/modified cells when
- *  a row is in failed state. Positioned on the right edge so the columns
- *  the user is used to (size, type, modified) collapse cleanly. */
-function FailedActions({
-  pending,
-}: {
-  pending: PendingInfo;
-}) {
-  const actions = useUploadsStore((s) => s.actions);
-  const uploadIds =
-    pending.kind === "file"
-      ? [pending.uploadId]
-      : // For aggregated folder rows we retry/dismiss every failed child.
-        // Folder kind doesn't expose ids (out of scope for v1 — we don't
-        // ship per-folder retry yet), so this branch only triggers from
-        // the per-file kind in practice.
-        [];
-
-  const handleRetry = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    for (const id of uploadIds) actions.retry(id);
-  };
-  const handleDismiss = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    for (const id of uploadIds) actions.cancel(id);
-  };
-
-  if (uploadIds.length === 0) {
-    return (
-      <div className="text-destructive flex shrink-0 items-center pr-2 font-mono text-[10px] uppercase">
-        Failed
-      </div>
-    );
-  }
-
-  return (
-    <div
-      className="flex shrink-0 items-center gap-1 pr-1"
-      onClick={(e) => e.stopPropagation()}
-    >
-      <button
-        type="button"
-        onClick={handleRetry}
-        title="Retry upload"
-        className="hover:bg-muted text-muted-foreground hover:text-foreground rounded p-1 focus:outline-none"
-      >
-        <RotateCw className="size-3.5" />
-      </button>
-      <button
-        type="button"
-        onClick={handleDismiss}
-        title="Dismiss"
-        className="hover:bg-destructive/10 text-muted-foreground hover:text-destructive rounded p-1 focus:outline-none"
-      >
-        <X className="size-3.5" />
-      </button>
-    </div>
-  );
-}

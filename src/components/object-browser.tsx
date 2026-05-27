@@ -44,7 +44,7 @@ import {
   useDeleteObjects,
   useObjects,
 } from "@/lib/api/objects";
-import { isEditableTarget } from "@/lib/shortcuts";
+import { isEditableTarget } from "@/lib/editable-target";
 import {
   downloadEntriesAsZip,
   gatherZipEntries,
@@ -103,24 +103,29 @@ export function ObjectBrowser({
 
   // Anchor for shift-click range selection — the last entry the user clicked
   // *without* shift. Reset whenever we navigate to a new prefix so a stale
-  // anchor can't extend selection across folders. Mirrored into a ref so the
+  // anchor can't extend selection across folders. Stored in a ref so the
   // row-click handler can stay referentially stable (React.memo on ObjectRow
   // would otherwise be defeated by the callback identity changing each render).
-  const [anchor, setAnchor] = React.useState<string | null>(null);
   const anchorRef = React.useRef<string | null>(null);
-  anchorRef.current = anchor;
+  const setAnchor = (id: string | null) => {
+    anchorRef.current = id;
+  };
 
   const closePreview = usePreviewStore((s) => s.close);
   const openPreview = usePreviewStore((s) => s.open);
   const previewOpenKey = usePreviewStore((s) => s.openKey);
 
+  // Selection and preview live in Zustand stores outside React's tree, so the
+  // parent route remounts this component via `key` on nav change to reset both.
+  // The mount-time clear keeps a stale selection from carrying over.
   React.useEffect(() => {
     clearSelection();
     setAnchor(null);
     // Stale preview from a different folder would point at a key the new
     // listing doesn't contain — clearer to dismiss than to show a ghost panel.
     closePreview();
-  }, [prefix, bucket, connectionId, clearSelection, closePreview]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [sortKey, setSortKey] = React.useState<ObjectSortKey>("name");
   const [sortDir, setSortDir] = React.useState<SortDirection>("asc");
@@ -349,10 +354,11 @@ export function ObjectBrowser({
       const sel = selectedIdsRef.current;
       const pending = pendingIdsRef.current;
       // Pending rows aren't selectable; "select all" means all real entries.
-      const ids =
-        pending.size === 0
-          ? vis.map(entryId)
-          : vis.map(entryId).filter((id) => !pending.has(id));
+      const ids: string[] = [];
+      for (const entry of vis) {
+        const id = entryId(entry);
+        if (pending.size === 0 || !pending.has(id)) ids.push(id);
+      }
       const allSelected = ids.length > 0 && ids.every((id) => sel.has(id));
       if (allSelected) {
         clearSelection();
@@ -618,20 +624,17 @@ export function ObjectBrowser({
       return;
     }
     const dest = normalizePrefix(destPrefix);
-    let succeeded = 0;
-    let failed = 0;
-    for (const entry of targets) {
-      try {
+    const results = await Promise.allSettled(
+      targets.map(async (entry) => {
         await copyObject.mutateAsync({
           sourceKey: entry.key,
           destKey: dest + basename(entry.key),
         });
         await deleteObjects.mutateAsync({ keys: [entry.key] });
-        succeeded += 1;
-      } catch {
-        failed += 1;
-      }
-    }
+      })
+    );
+    const succeeded = results.filter((r) => r.status === "fulfilled").length;
+    const failed = results.length - succeeded;
     if (failed === 0) {
       toast.success(`Moved ${succeeded} file${succeeded === 1 ? "" : "s"}`);
     } else {
@@ -651,19 +654,16 @@ export function ObjectBrowser({
       return;
     }
     const dest = normalizePrefix(destPrefix);
-    let succeeded = 0;
-    let failed = 0;
-    for (const entry of targets) {
-      try {
-        await copyObject.mutateAsync({
+    const results = await Promise.allSettled(
+      targets.map((entry) =>
+        copyObject.mutateAsync({
           sourceKey: entry.key,
           destKey: dest + basename(entry.key),
-        });
-        succeeded += 1;
-      } catch {
-        failed += 1;
-      }
-    }
+        })
+      )
+    );
+    const succeeded = results.filter((r) => r.status === "fulfilled").length;
+    const failed = results.length - succeeded;
     if (failed === 0) {
       toast.success(`Copied ${succeeded} file${succeeded === 1 ? "" : "s"}`);
     } else {

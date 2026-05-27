@@ -129,7 +129,7 @@ export function ObjectGrid({
 
   return (
     <ObjectListContextMenu visible={visible} onAction={onContextAction}>
-      <div ref={parentRef} className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+      <div ref={parentRef} className="min-h-0 flex-1 overflow-y-auto p-3">
         <div
           style={{
             height: `${rowVirtualizer.getTotalSize()}px`,
@@ -203,7 +203,7 @@ function LoaderRow({ loading }: { loading: boolean }) {
       {loading ? (
         <>
           <Loader2 className="text-primary-text size-3.5 animate-spin" />
-          Loading more...
+          Loading more…
         </>
       ) : (
         <span className="text-muted-foreground">scroll to load more</span>
@@ -250,7 +250,7 @@ function ObjectTileImpl({
         ? pendingDisplay.anyFailed
         : false;
 
-  const handleClick = (e: React.MouseEvent) => {
+  const handleActivate = (e: { shiftKey: boolean; metaKey: boolean; ctrlKey: boolean }) => {
     if (pendingDisplay) return;
     const mods = { shift: e.shiftKey, meta: e.metaKey || e.ctrlKey };
     if (!mods.shift && !mods.meta) {
@@ -272,7 +272,16 @@ function ObjectTileImpl({
 
   return (
     <div
-      onClick={handleClick}
+      role="button"
+      tabIndex={pendingDisplay ? -1 : 0}
+      aria-label={display}
+      onClick={handleActivate}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          handleActivate(e);
+        }
+      }}
       data-entry-id={id}
       data-pending={pendingDisplay ? "true" : undefined}
       className={cn(

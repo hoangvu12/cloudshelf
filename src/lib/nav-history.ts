@@ -13,10 +13,13 @@ export function useTrackNavEntry(entry: NavEntry) {
   const push = useNavHistoryStore((s) => s.push);
   const key =
     entry.kind === "home" ? "home" : `bucket:${entry.bucket}:${entry.prefix}`;
+  // Hold the latest entry in a ref so the effect can read it without taking
+  // a render-identity dep — push() dedups by `key`, so we only need to trigger
+  // when the flattened key actually changes.
+  const entryRef = React.useRef(entry);
+  entryRef.current = entry;
   React.useEffect(() => {
-    push(entry);
-    // `entry` is recreated each render; the flattened `key` is the real dep.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    push(entryRef.current);
   }, [key, push]);
 }
 

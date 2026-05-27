@@ -29,10 +29,50 @@ const PRESETS = [
   { label: "7d", seconds: 7 * 24 * 60 * 60 },
 ] as const;
 
+interface LinkState {
+  url: string | null;
+  expiresAt: string | null;
+  pending: boolean;
+  error: string | null;
+}
+
+type LinkAction =
+  | { type: "start" }
+  | { type: "success"; url: string; expiresAt: string }
+  | { type: "fail"; message: string };
+
+const initialLinkState: LinkState = {
+  url: null,
+  expiresAt: null,
+  pending: false,
+  error: null,
+};
+
+function linkReducer(state: LinkState, action: LinkAction): LinkState {
+  switch (action.type) {
+    case "start":
+      return { ...state, pending: true, error: null };
+    case "success":
+      return {
+        url: action.url,
+        expiresAt: action.expiresAt,
+        pending: false,
+        error: null,
+      };
+    case "fail":
+      return {
+        url: null,
+        expiresAt: null,
+        pending: false,
+        error: action.message,
+      };
+  }
+}
+
 /**
  * Mint-a-presigned-link dialog. Holds its own URL state and re-fetches each
- * time the open transition flips or the TTL chip changes; parent only owns
- * which file is being shared via `objectKey`.
+ * time the TTL chip changes; parent only owns which file is being shared via
+ * `objectKey`. The body mounts on open so state resets naturally on close.
  */
 export function ShareDialog({
   open,
@@ -50,52 +90,62 @@ export function ShareDialog({
    *  blank-out mid-animation. */
   objectKey: string | null;
 }) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        {open && objectKey && (
+          <ShareDialogBody
+            connectionId={connectionId}
+            bucket={bucket}
+            objectKey={objectKey}
+            onClose={() => onOpenChange(false)}
+          />
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ShareDialogBody({
+  connectionId,
+  bucket,
+  objectKey,
+  onClose,
+}: {
+  connectionId: string;
+  bucket: string;
+  objectKey: string;
+  onClose: () => void;
+}) {
   const [seconds, setSeconds] = React.useState<number>(PRESETS[0].seconds);
   const [customStr, setCustomStr] = React.useState<string>("");
-  const [url, setUrl] = React.useState<string | null>(null);
-  const [expiresAt, setExpiresAt] = React.useState<string | null>(null);
-  const [pending, setPending] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
+  const [link, dispatch] = React.useReducer(linkReducer, initialLinkState);
 
   React.useEffect(() => {
-    if (!open) return;
-    setSeconds(PRESETS[0].seconds);
-    setCustomStr("");
-    setUrl(null);
-    setExpiresAt(null);
-    setError(null);
-  }, [open, objectKey]);
-
-  React.useEffect(() => {
-    if (!open || !objectKey) return;
     let cancelled = false;
-    setPending(true);
-    setError(null);
+    dispatch({ type: "start" });
     fetchDownloadUrl(connectionId, bucket, objectKey, seconds)
       .then((res) => {
         if (cancelled) return;
-        setUrl(res.url);
-        setExpiresAt(res.expiresAt);
+        dispatch({ type: "success", url: res.url, expiresAt: res.expiresAt });
       })
       .catch((e) => {
         if (cancelled) return;
-        setUrl(null);
-        setExpiresAt(null);
-        setError(e instanceof Error ? e.message : "Couldn't mint link");
-      })
-      .finally(() => {
-        if (!cancelled) setPending(false);
+        dispatch({
+          type: "fail",
+          message: e instanceof Error ? e.message : "Couldn't mint link",
+        });
       });
     return () => {
       cancelled = true;
     };
-  }, [open, objectKey, connectionId, bucket, seconds]);
+  }, [objectKey, connectionId, bucket, seconds]);
 
   const [copied, flashCopied] = useCopied();
   const handleCopy = async () => {
-    if (!url) return;
+    if (!link.url) return;
     try {
-      await navigator.clipboard.writeText(url);
+      await navigator.clipboard.writeText(link.url);
       flashCopied();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Couldn't copy");
@@ -115,124 +165,118 @@ export function ShareDialog({
     customStr !== "" && !PRESETS.some((p) => p.seconds === seconds);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Share link</DialogTitle>
-          <DialogDescription className="font-mono text-xs">
-            {objectKey ? (
-              <code className="break-all">{basename(objectKey)}</code>
-            ) : null}
-          </DialogDescription>
-        </DialogHeader>
+    <>
+      <DialogHeader>
+        <DialogTitle>Share link</DialogTitle>
+        <DialogDescription className="font-mono text-xs">
+          <code className="break-all">{basename(objectKey)}</code>
+        </DialogDescription>
+      </DialogHeader>
 
-        <div className="space-y-5">
-          <div>
-            <div className="text-muted-foreground mb-2 font-mono text-[10px] tracking-wider uppercase">
-              Expires in
-            </div>
-            <div className="flex flex-wrap items-center gap-1.5">
-              {PRESETS.map((p) => {
-                const active = !isCustom && seconds === p.seconds;
-                return (
-                  <button
-                    key={p.label}
-                    type="button"
-                    onClick={() => {
-                      setSeconds(p.seconds);
-                      setCustomStr("");
-                    }}
-                    className={cn(
-                      "rounded-md border px-3 py-1.5 font-mono text-[11px] transition-colors",
-                      active
-                        ? "border-primary-text/40 bg-primary-text/15 text-primary-text"
-                        : "border-border bg-input-bg text-foreground hover:bg-surface-1"
-                    )}
-                  >
-                    {p.label}
-                  </button>
-                );
-              })}
-              <div className="flex items-center gap-1.5">
-                <Input
-                  type="number"
-                  inputMode="numeric"
-                  min={MIN_SECONDS}
-                  max={MAX_SECONDS}
-                  value={customStr}
-                  onChange={(e) => setCustomStr(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      handleCustomApply();
-                    }
-                  }}
-                  placeholder="Custom (s)"
-                  className="h-9 w-28 text-xs"
-                />
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={handleCustomApply}
-                  disabled={!customStr}
-                >
-                  Apply
-                </Button>
-              </div>
-            </div>
+      <div className="space-y-5">
+        <div>
+          <div className="text-muted-foreground mb-2 font-mono text-[10px] tracking-wider uppercase">
+            Expires in
           </div>
-
-          <div>
-            <div className="text-muted-foreground mb-2 font-mono text-[10px] tracking-wider uppercase">
-              URL
-            </div>
-            <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {PRESETS.map((p) => {
+              const active = !isCustom && seconds === p.seconds;
+              return (
+                <button
+                  key={p.label}
+                  type="button"
+                  onClick={() => {
+                    setSeconds(p.seconds);
+                    setCustomStr("");
+                  }}
+                  className={cn(
+                    "rounded-md border px-3 py-1.5 font-mono text-[11px] transition-colors",
+                    active
+                      ? "border-primary-text/40 bg-primary-text/15 text-primary-text"
+                      : "border-border bg-input-bg text-foreground hover:bg-surface-1"
+                  )}
+                >
+                  {p.label}
+                </button>
+              );
+            })}
+            <div className="flex items-center gap-1.5">
               <Input
-                readOnly
-                value={pending ? "Generating…" : (error ?? url ?? "")}
-                onFocus={(e) => e.currentTarget.select()}
-                className={cn(
-                  "h-9 flex-1 font-mono text-[11px]",
-                  error && "text-destructive"
-                )}
+                type="number"
+                inputMode="numeric"
+                min={MIN_SECONDS}
+                max={MAX_SECONDS}
+                value={customStr}
+                onChange={(e) => setCustomStr(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleCustomApply();
+                  }
+                }}
+                placeholder="Custom (s)"
+                aria-label="Custom expiry in seconds"
+                className="h-9 w-28 text-xs"
               />
               <Button
                 type="button"
                 size="sm"
                 variant="outline"
-                onClick={handleCopy}
-                disabled={!url || pending}
-                className={copied ? "text-success" : undefined}
+                onClick={handleCustomApply}
+                disabled={!customStr}
               >
-                {copied ? (
-                  <>
-                    <CheckIcon /> Copied
-                  </>
-                ) : (
-                  <>
-                    <LinkIcon /> Copy
-                  </>
-                )}
+                Apply
               </Button>
             </div>
-            <Countdown expiresAt={expiresAt} />
           </div>
-
-          <QrPanel value={url} />
         </div>
 
-        <DialogFooter>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-          >
-            Close
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        <div>
+          <div className="text-muted-foreground mb-2 font-mono text-[10px] tracking-wider uppercase">
+            URL
+          </div>
+          <div className="flex gap-2">
+            <Input
+              readOnly
+              value={link.pending ? "Generating…" : (link.error ?? link.url ?? "")}
+              onFocus={(e) => e.currentTarget.select()}
+              aria-label="Generated share URL"
+              className={cn(
+                "h-9 flex-1 font-mono text-[11px]",
+                link.error && "text-destructive"
+              )}
+            />
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={handleCopy}
+              disabled={!link.url || link.pending}
+              className={copied ? "text-success" : undefined}
+            >
+              {copied ? (
+                <>
+                  <CheckIcon /> Copied
+                </>
+              ) : (
+                <>
+                  <LinkIcon /> Copy
+                </>
+              )}
+            </Button>
+          </div>
+          <Countdown expiresAt={link.expiresAt} />
+        </div>
+
+        <QrPanel value={link.url} />
+      </div>
+
+      <DialogFooter>
+        <Button type="button" variant="outline" onClick={onClose}>
+          Close
+        </Button>
+      </DialogFooter>
+    </>
   );
 }
 

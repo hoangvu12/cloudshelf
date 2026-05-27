@@ -84,13 +84,15 @@ export async function listBucketsForConnection(
   const client = createS3Client(conn);
   try {
     const out = await client.send(new ListBucketsCommand({}));
-    return (out.Buckets ?? [])
-      .filter((b) => b.Name)
-      .map((b) => ({
-        name: b.Name!,
-        createdAt:
-          b.CreationDate?.toISOString() ?? new Date(0).toISOString(),
-      }));
+    const result: Bucket[] = [];
+    for (const b of out.Buckets ?? []) {
+      if (!b.Name) continue;
+      result.push({
+        name: b.Name,
+        createdAt: b.CreationDate?.toISOString() ?? new Date(0).toISOString(),
+      });
+    }
+    return result;
   } finally {
     client.destroy();
   }
@@ -156,22 +158,26 @@ export async function listObjectsForConnection(
       })
     );
 
-    const prefixes: S3Entry[] = (out.CommonPrefixes ?? [])
-      .filter((p) => p.Prefix)
-      .map((p) => ({ type: "prefix" as const, prefix: p.Prefix! }));
+    const prefixes: S3Entry[] = [];
+    for (const p of out.CommonPrefixes ?? []) {
+      if (!p.Prefix) continue;
+      prefixes.push({ type: "prefix" as const, prefix: p.Prefix });
+    }
 
-    const objects: S3Entry[] = (out.Contents ?? [])
-      // Skip the prefix's own zero-byte folder marker so we don't show "./" twice.
-      .filter((o) => o.Key && o.Key !== normalized)
-      .map((o) => ({
+    // Skip the prefix's own zero-byte folder marker so we don't show "./" twice.
+    const objects: S3Entry[] = [];
+    for (const o of out.Contents ?? []) {
+      if (!o.Key || o.Key === normalized) continue;
+      objects.push({
         type: "object" as const,
-        key: o.Key!,
+        key: o.Key,
         size: o.Size ?? 0,
         lastModified:
           o.LastModified?.toISOString() ?? new Date(0).toISOString(),
         etag: o.ETag ?? undefined,
         storageClass: o.StorageClass ?? undefined,
-      }));
+      });
+    }
 
     return {
       entries: [...prefixes, ...objects],
@@ -219,19 +225,26 @@ export async function deleteObjectsForConnection(
   if (keys.length === 0) return { deleted: 0, errors: [] };
   const client = createS3Client(conn);
   try {
+    const chunks: string[][] = [];
+    for (let i = 0; i < keys.length; i += 1000) {
+      chunks.push(keys.slice(i, i + 1000));
+    }
+    const responses = await Promise.all(
+      chunks.map((chunk) =>
+        client.send(
+          new DeleteObjectsCommand({
+            Bucket: bucket,
+            Delete: {
+              Objects: chunk.map((Key) => ({ Key })),
+              Quiet: false,
+            },
+          })
+        )
+      )
+    );
     let deleted = 0;
     const errors: { key: string; message: string }[] = [];
-    for (let i = 0; i < keys.length; i += 1000) {
-      const chunk = keys.slice(i, i + 1000);
-      const out = await client.send(
-        new DeleteObjectsCommand({
-          Bucket: bucket,
-          Delete: {
-            Objects: chunk.map((Key) => ({ Key })),
-            Quiet: false,
-          },
-        })
-      );
+    for (const out of responses) {
       deleted += out.Deleted?.length ?? 0;
       for (const err of out.Errors ?? []) {
         errors.push({
@@ -472,7 +485,7 @@ export async function completeMultipartUpload(
   try {
     // S3 requires Parts in strictly ascending PartNumber order — defend
     // against a client that hands us the array out of order.
-    const sorted = [...parts].sort((a, b) => a.partNumber - b.partNumber);
+    const sorted = parts.toSorted((a, b) => a.partNumber - b.partNumber);
     const out = await client.send(
       new CompleteMultipartUploadCommand({
         Bucket: bucket,

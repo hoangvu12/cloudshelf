@@ -73,24 +73,32 @@ export async function gatherZipEntries(
   const stripBase = (key: string) =>
     key.startsWith(base) ? key.slice(base.length) : key;
 
-  const out: ZipEntry[] = [];
+  const objectEntries: ZipEntry[] = [];
+  const folderPrefixes: string[] = [];
   for (const entry of selected) {
     if (entry.type === "object") {
       const name = stripBase(entry.key) || basename(entry.key);
       if (!name) continue;
-      out.push({
+      objectEntries.push({
         key: entry.key,
         name,
         lastModified: entry.lastModified,
         size: entry.size,
       });
-      continue;
+    } else {
+      folderPrefixes.push(entry.prefix);
     }
-    const all = await listAllInPrefix(connectionId, bucket, entry.prefix);
+  }
+
+  const folderLists = await Promise.all(
+    folderPrefixes.map((p) => listAllInPrefix(connectionId, bucket, p))
+  );
+  const folderEntries: ZipEntry[] = [];
+  for (const all of folderLists) {
     for (const obj of all) {
       const name = stripBase(obj.key);
       if (!name || name.endsWith("/")) continue;
-      out.push({
+      folderEntries.push({
         key: obj.key,
         name,
         lastModified: obj.lastModified,
@@ -98,7 +106,8 @@ export async function gatherZipEntries(
       });
     }
   }
-  return out;
+
+  return [...objectEntries, ...folderEntries];
 }
 
 /**

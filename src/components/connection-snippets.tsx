@@ -236,7 +236,7 @@ function SnippetsBody({ conn }: { conn: S3Connection }) {
 
       <p className="text-muted-foreground font-mono text-[10px] leading-relaxed">
         Copy includes the real secret even while hidden. Treat the snippet like
-        a credential — anyone with it can read and write to this endpoint.
+        a credential: anyone with it can read and write to this endpoint.
       </p>
     </div>
   );
@@ -248,11 +248,17 @@ function SnippetsBody({ conn }: { conn: S3Connection }) {
  * worker so the snippets dialog doesn't spin up a second Shiki instance.
  */
 function HighlightedBlock({ code, lang }: { code: string; lang: ShikiLang }) {
+  // Re-mount via key so a code/lang change starts from the plain-text
+  // fallback while the worker rehighlights, instead of cascading setStates
+  // through the same instance.
+  return <HighlightedBlockInner key={`${lang}:${code}`} code={code} lang={lang} />;
+}
+
+function HighlightedBlockInner({ code, lang }: { code: string; lang: ShikiLang }) {
   const [tokens, setTokens] = React.useState<ThemedToken[][] | null>(null);
 
   React.useEffect(() => {
     let cancelled = false;
-    setTokens(null);
     highlightToTokens(code, lang)
       .then((toks) => {
         if (!cancelled) setTokens(toks);
@@ -290,20 +296,29 @@ function HighlightedBlock({ code, lang }: { code: string; lang: ShikiLang }) {
 }
 
 function renderTokens(tokens: ThemedToken[][]): React.ReactNode {
-  return tokens.map((line, i) => (
-    <React.Fragment key={i}>
-      {line.length === 0 ? (
-        " "
-      ) : (
-        line.map((t, j) => (
-          <span key={j} style={tokenStyle(t)}>
-            {t.content}
-          </span>
-        ))
-      )}
-      {"\n"}
-    </React.Fragment>
-  ));
+  let lineOffset = 0;
+  return tokens.map((line) => {
+    const lineText = line.map((t) => t.content).join("");
+    const lineKey = `${lineOffset}:${lineText}`;
+    lineOffset += lineText.length + 1;
+    let offset = 0;
+    return (
+      <React.Fragment key={lineKey}>
+        {line.length === 0
+          ? " "
+          : line.map((t) => {
+              const key = `${offset}:${t.content.length}`;
+              offset += t.content.length;
+              return (
+                <span key={key} style={tokenStyle(t)}>
+                  {t.content}
+                </span>
+              );
+            })}
+        {"\n"}
+      </React.Fragment>
+    );
+  });
 }
 
 /** Shiki's FontStyle is a bitfield: Italic=1, Bold=2, Underline=4. NotSet=-1

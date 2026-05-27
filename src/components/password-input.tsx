@@ -4,12 +4,15 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 interface PasswordInputProps
-  extends Omit<React.ComponentProps<typeof Input>, "type"> {}
+  extends Omit<React.ComponentProps<typeof Input>, "type"> {
+  ref?: React.Ref<HTMLInputElement>;
+}
 
-export const PasswordInput = React.forwardRef<
-  HTMLInputElement,
-  PasswordInputProps
->(function PasswordInput({ className, ...props }, ref) {
+export function PasswordInput({
+  className,
+  ref,
+  ...props
+}: PasswordInputProps) {
   const [visible, setVisible] = React.useState(false);
 
   return (
@@ -35,4 +38,4 @@ export const PasswordInput = React.forwardRef<
       </button>
     </div>
   );
-});
+}
