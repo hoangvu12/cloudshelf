@@ -1,19 +1,12 @@
 import * as React from "react";
-import { useNavigate } from "@tanstack/react-router";
-import { useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
-import { FolderX, ServerCrash, Settings, UploadCloud } from "@/lib/icons";
+import { FolderX, ServerCrash, UploadCloud } from "@/lib/icons";
 
-import { AppStatusBar } from "@/components/app-shell";
-import { BreadcrumbPath } from "@/components/breadcrumb-path";
-import { BucketSettingsDialog } from "@/components/bucket-dialogs";
 import { EmptyState } from "@/components/empty-state";
 import {
-  ConfirmDeleteDialog,
-  MovePromptDialog,
-  NewFolderDialog,
-  RenameDialog,
-} from "@/components/object-dialogs";
+  ObjectBrowserDialogs,
+  ObjectBrowserHeader,
+  ObjectBrowserStatusBar,
+} from "@/components/object-browser-dialogs";
 import {
   ObjectList,
   type ContextAction,
@@ -21,56 +14,24 @@ import {
 import { ObjectGrid } from "@/components/object-grid";
 import type { RowClickModifiers } from "@/components/object-row";
 import { ObjectToolbar } from "@/components/object-toolbar";
-import { UploadDropzone, type UploadInputFile } from "@/components/upload-dropzone";
-import { UploadFromUrlDialog } from "@/components/upload-from-url-dialog";
-import { formatBytes, formatCount } from "@/lib/format";
+import { UploadDropzone } from "@/components/upload-dropzone";
 import {
-  basename,
-  dirname,
-  entryId,
-  normalizePrefix,
-  trimTrailingSlash,
-} from "@/lib/object-path";
-import {
-  sortAndFilterEntries,
   type ObjectSortKey,
   type SortDirection,
 } from "@/lib/object-sort";
-import {
-  fetchDownloadUrl,
-  objectKeys,
-  useCopyObject,
-  useCreateFolder,
-  useDeleteObjects,
-  useObjects,
-} from "@/lib/api/objects";
-import { isEditableTarget } from "@/lib/editable-target";
-import {
-  downloadEntriesAsZip,
-  gatherZipEntries,
-  HARD_CAP_BYTES,
-  SOFT_WARN_BYTES,
-  totalZipBytes,
-} from "@/lib/zip-download";
+import { useObjects } from "@/lib/api/objects";
+import { useObjectBrowserActions } from "@/lib/use-object-browser-actions";
+import { useObjectBrowserData } from "@/lib/use-object-browser-data";
+import { useObjectBrowserDownloads } from "@/lib/use-object-browser-downloads";
+import { useObjectBrowserKeyboard } from "@/lib/use-object-browser-keyboard";
+import { useObjectBrowserMutations } from "@/lib/use-object-browser-mutations";
+import { useObjectBrowserSelection } from "@/lib/use-object-browser-selection";
+import { useObjectBrowserUploads } from "@/lib/use-object-browser-uploads";
 import { useSelectionStore } from "@/stores/selection";
 import { usePreviewStore } from "@/stores/preview";
 import { usePrefsStore } from "@/stores/prefs";
 import { useShareStore } from "@/stores/share";
-import {
-  onUploadCompleted,
-  usePendingEntriesForPrefix,
-  useUploadsStore,
-} from "@/stores/uploads";
-import type { S3Entry, S3ObjectEntry } from "@server/types";
-
-/** S3's per-object size ceiling. The worker auto-splits anything over the
- *  multipart threshold so we don't need a separate single-PUT cap. */
-const MAX_UPLOAD_BYTES = 5 * 1024 ** 4;
-
-/** Shared empty Set so the pendingIds memo can return a stable identity
- *  on the common (no-uploads-in-flight) path — keeps memoized consumers
- *  from re-running. */
-const EMPTY_PENDING_IDS: ReadonlySet<string> = new Set();
+import type { S3Entry } from "@server/types";
 
 /**
  * The object browser screen: breadcrumb + morphing toolbar + virtualized list,
@@ -91,10 +52,6 @@ export function ObjectBrowser({
   bucket: string;
   prefix: string;
 }) {
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const query = useObjects(connectionId, bucket, prefix);
-
   const selectedIds = useSelectionStore((s) => s.selected);
   const toggleSelection = useSelectionStore((s) => s.toggle);
   const setManySelected = useSelectionStore((s) => s.setMany);
@@ -155,96 +112,31 @@ export function ObjectBrowser({
   const filterInputRef = React.useRef<HTMLInputElement>(null);
 
   // ─── Derived data ───────────────────────────────────────────────────────
-  // Flatten infinite-query pages into one list. Pages are appended in order,
-  // and S3 returns lexicographic key order, so the result is stable.
-  const entries: S3Entry[] = React.useMemo(
-    () => query.data?.pages.flatMap((p) => p.entries) ?? [],
-    [query.data]
-  );
-
-  // Synthetic entries for in-flight uploads so the user sees their files
-  // appear in the list immediately, before the post-upload listener
-  // invalidates the query. Real S3 entries always win on dedupe — when the
-  // refetch lands, the synthetic row falls away cleanly.
-  const pendingFromUploads = usePendingEntriesForPrefix(
+  const {
+    query,
+    entries,
+    pendingIds,
+    visible,
+    selectedEntries,
+    totalBytes,
+  } = useObjectBrowserData({
     connectionId,
     bucket,
-    prefix
-  );
+    prefix,
+    selectedIds,
+    sortKey,
+    sortDir,
+    filter,
+  });
 
-  const mergedEntries = React.useMemo<S3Entry[]>(() => {
-    if (
-      pendingFromUploads.files.length === 0 &&
-      pendingFromUploads.folders.length === 0
-    ) {
-      return entries;
-    }
-    const existingKeys = new Set<string>();
-    const existingPrefixes = new Set<string>();
-    for (const e of entries) {
-      if (e.type === "object") existingKeys.add(e.key);
-      else existingPrefixes.add(e.prefix);
-    }
-    const result: S3Entry[] = [...entries];
-    for (const f of pendingFromUploads.files) {
-      if (!existingKeys.has(f.key)) result.push(f);
-    }
-    for (const d of pendingFromUploads.folders) {
-      if (!existingPrefixes.has(d.prefix)) result.push(d);
-    }
-    return result;
-  }, [entries, pendingFromUploads]);
-
-  // entryIds that should render with the pending decoration. Files always
-  // get it (so an in-flight overwrite shows progress on the existing row).
-  // Folders only get it when synthetic — a real folder that happens to
-  // contain pending children stays unadorned.
-  const pendingIds = React.useMemo<ReadonlySet<string>>(() => {
-    if (
-      pendingFromUploads.files.length === 0 &&
-      pendingFromUploads.folders.length === 0
-    ) {
-      return EMPTY_PENDING_IDS;
-    }
-    const existingPrefixes = new Set<string>();
-    for (const e of entries) {
-      if (e.type === "prefix") existingPrefixes.add(e.prefix);
-    }
-    const s = new Set<string>();
-    for (const f of pendingFromUploads.files) s.add(f.key);
-    for (const d of pendingFromUploads.folders) {
-      if (!existingPrefixes.has(d.prefix)) s.add(d.prefix);
-    }
-    return s;
-  }, [pendingFromUploads, entries]);
-
-  const visible = React.useMemo(
-    () => sortAndFilterEntries(mergedEntries, prefix, filter, sortKey, sortDir),
-    [mergedEntries, prefix, filter, sortKey, sortDir]
-  );
+  // Refs mirroring values that handlers below need to read without making
+  // them dependencies (which would defeat useCallback stability — and stable
+  // identities are what let React.memo bail the cascade into ObjectList).
   // Same trick as anchorRef: shift-click range math needs `visible` in the
   // current visible order, but the callback can't take it as a dep without
   // changing identity every render.
   const visibleRef = React.useRef<S3Entry[]>(visible);
   visibleRef.current = visible;
-
-  const entryById = React.useMemo(() => {
-    const m = new Map<string, S3Entry>();
-    for (const e of entries) m.set(entryId(e), e);
-    return m;
-  }, [entries]);
-
-  const selectedEntries = React.useMemo(
-    () =>
-      Array.from(selectedIds)
-        .map((id) => entryById.get(id))
-        .filter((e): e is S3Entry => !!e),
-    [selectedIds, entryById]
-  );
-
-  // Refs mirroring values that handlers below need to read without making
-  // them dependencies (which would defeat useCallback stability — and stable
-  // identities are what let React.memo bail the cascade into ObjectList).
   const selectedIdsRef = React.useRef(selectedIds);
   selectedIdsRef.current = selectedIds;
   const sortKeyRef = React.useRef(sortKey);
@@ -254,785 +146,126 @@ export function ObjectBrowser({
   const pendingIdsRef = React.useRef(pendingIds);
   pendingIdsRef.current = pendingIds;
 
-  const totalBytes = entries.reduce(
-    (sum, e) => sum + (e.type === "object" ? e.size : 0),
-    0
-  );
-
-  // ─── Mutations ──────────────────────────────────────────────────────────
-  const createFolder = useCreateFolder(connectionId, bucket, {
-    onSuccess: () => toast.success("Folder created"),
-    onError: (e) => toast.error(e.message),
+  // ─── Per-entry actions, upload flow ────────────────────────────────────
+  const {
+    downloadEntry,
+    handleDownloadSelected,
+    handleDownloadAsZip,
+    copyEntryLink,
+    handleCopyLink,
+  } = useObjectBrowserDownloads({
+    connectionId,
+    bucket,
+    prefix,
+    selectedEntries,
+    selectedIdsRef,
   });
-  const deleteObjects = useDeleteObjects(connectionId, bucket);
-  const copyObject = useCopyObject(connectionId, bucket);
 
-  // ─── Navigation ─────────────────────────────────────────────────────────
-  const navigateToPrefix = React.useCallback(
-    (target: string) => {
-      const splat = trimTrailingSlash(target);
-      navigate({
-        to: "/buckets/$bucketName/$",
-        params: { bucketName: bucket, _splat: splat },
-      });
-    },
-    [navigate, bucket]
-  );
+  const { handleUploadFiles } = useObjectBrowserUploads({
+    connectionId,
+    bucket,
+    prefix,
+    entries,
+  });
 
-  // Plain click on a row goes through this. Folders navigate, files open the
-  // preview drawer. The context menu's "Open in new tab" uses
-  // handleOpenInNewTab instead so it can still bypass the drawer.
-  const handleOpen = React.useCallback(
-    (entry: S3Entry) => {
-      if (entry.type === "prefix") {
-        navigateToPrefix(entry.prefix);
-        return;
-      }
-      const siblings = visibleRef.current
-        .filter((e): e is S3ObjectEntry => e.type === "object")
-        .map((e) => e.key);
-      openPreview(entry.key, siblings);
-    },
-    [navigateToPrefix, openPreview]
-  );
+  // ─── Mutations + dialog confirmation handlers ──────────────────────────
+  const {
+    createFolderPending,
+    copyObjectPending,
+    deleteObjectsPending,
+    handleConfirmNewFolder,
+    handleConfirmRename,
+    handleConfirmMove,
+    handleConfirmCopyTo,
+    handleConfirmDelete,
+  } = useObjectBrowserMutations({
+    connectionId,
+    bucket,
+    prefix,
+    selectedEntries,
+    renameTarget,
+    setNewFolderOpen,
+    setRenameOpen,
+    setMoveOpen,
+    setCopyToOpen,
+    setDeleteOpen,
+  });
 
-  const handleOpenInNewTab = React.useCallback(
-    async (entry: S3Entry) => {
-      if (entry.type !== "object") return;
-      try {
-        const { url } = await fetchDownloadUrl(connectionId, bucket, entry.key);
-        window.open(url, "_blank", "noopener,noreferrer");
-      } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Couldn't open file");
-      }
-    },
-    [connectionId, bucket]
-  );
+  // ─── Navigation + sort + toolbar delegates ─────────────────────────────
+  const {
+    navigate,
+    navigateToPrefix,
+    handleOpen,
+    handleOpenInNewTab,
+    handleSortChange,
+    handleRenameFromToolbar,
+    handleCopyLinkFromToolbar,
+    handleShareFromToolbar,
+    handlePreviewFromToolbar,
+    canPreviewFromToolbar,
+  } = useObjectBrowserActions({
+    connectionId,
+    bucket,
+    visible,
+    visibleRef,
+    selectedEntries,
+    sortKeyRef,
+    setSortKey,
+    setSortDir,
+    openPreview,
+    openShare,
+    copyEntryLink,
+    setRenameTarget,
+    setRenameOpen,
+  });
 
-  // ─── Selection (modifier-aware) ─────────────────────────────────────────
-  // Stable across renders so React.memo on ObjectRow can actually skip the
-  // non-affected rows. Reads anchor + visible through refs (which mirror the
-  // state) instead of taking them as deps.
-  const handleSelectRow = React.useCallback(
-    (entry: S3Entry, mods: RowClickModifiers) => {
-      const id = entryId(entry);
-      const currentAnchor = anchorRef.current;
-
-      if (mods.shift && currentAnchor) {
-        // Range select against the *visible* order. If the anchor scrolled out
-        // of the current filter, fall back to single-select so we don't silently
-        // select nothing.
-        const ids = visibleRef.current.map(entryId);
-        const a = ids.indexOf(currentAnchor);
-        const b = ids.indexOf(id);
-        if (a >= 0 && b >= 0) {
-          const [from, to] = a < b ? [a, b] : [b, a];
-          // Drop pending rows that fall inside the range — they're not
-          // selectable (no real S3 entry yet).
-          const pending = pendingIdsRef.current;
-          const sliced = ids.slice(from, to + 1);
-          setManySelected(
-            pending.size === 0
-              ? sliced
-              : sliced.filter((sid) => !pending.has(sid))
-          );
-          // Anchor intentionally stays — next shift-click re-extends from it.
-          return;
-        }
-      }
-
-      // Plain click and Cmd/Ctrl-click both additively toggle, matching how
-      // the checkbox behaves. Range select still requires shift.
-      toggleSelection(id);
-      setAnchor(id);
-    },
-    [toggleSelection, setManySelected]
-  );
-
-  const handleSelectAll = React.useCallback(
-    (vis: S3Entry[]) => {
-      const sel = selectedIdsRef.current;
-      const pending = pendingIdsRef.current;
-      // Pending rows aren't selectable; "select all" means all real entries.
-      const ids: string[] = [];
-      for (const entry of vis) {
-        const id = entryId(entry);
-        if (pending.size === 0 || !pending.has(id)) ids.push(id);
-      }
-      const allSelected = ids.length > 0 && ids.every((id) => sel.has(id));
-      if (allSelected) {
-        clearSelection();
-        setAnchor(null);
-      } else {
-        setManySelected(ids);
-        setAnchor(ids[0] ?? null);
-      }
-    },
-    [clearSelection, setManySelected]
-  );
-
-  // ─── Per-entry actions ──────────────────────────────────────────────────
-  const downloadEntry = async (entry: S3Entry) => {
-    if (entry.type !== "object") return;
-    try {
-      const { url } = await fetchDownloadUrl(connectionId, bucket, entry.key);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = basename(entry.key);
-      a.rel = "noopener";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Download failed");
-    }
-  };
-
-  const handleDownloadSelected = async () => {
-    const files = selectedEntries.filter(
-      (e): e is S3ObjectEntry => e.type === "object"
-    );
-    if (files.length === 0) {
-      toast.info("No files in selection (folders aren't downloadable)");
-      return;
-    }
-    for (const file of files) {
-      await downloadEntry(file);
-      // Brief stagger so browsers don't lump these into a popup-blocker prompt.
-      await new Promise((r) => setTimeout(r, 80));
-    }
-  };
-
-  /**
-   * Bundle the current selection (files + recursive folders) into a single
-   * .zip in the browser. Server only sees presign + listing round-trips; the
-   * S3 GETs go straight from S3 to the browser, then through client-zip.
-   *
-   * Soft-warns >2GB (Blob URL memory pressure varies), hard-refuses >10GB.
-   * "Select a folder" picks recursion at the toolbar level — the listing
-   * here happens after the user has clicked, so the toast doubles as
-   * progress feedback for slow folder walks.
-   */
-  const handleDownloadAsZip = async (
-    targetEntry?: S3Entry
-  ): Promise<void> => {
-    const targets: S3Entry[] = targetEntry
-      ? selectedIdsRef.current.has(entryId(targetEntry))
-        ? selectedEntries
-        : [targetEntry]
-      : selectedEntries;
-    if (targets.length === 0) {
-      toast.info("Nothing selected");
-      return;
-    }
-    const toastId = toast.loading("Preparing ZIP…");
-    try {
-      const zipEntries = await gatherZipEntries(
-        connectionId,
-        bucket,
-        targets,
-        prefix
-      );
-      if (zipEntries.length === 0) {
-        toast.info("Selection has no files", { id: toastId });
-        return;
-      }
-      const bytes = totalZipBytes(zipEntries);
-      if (bytes > HARD_CAP_BYTES) {
-        toast.error(
-          `Selection is ${formatBytes(bytes)} — too large for one ZIP. Use multiple downloads.`,
-          { id: toastId }
-        );
-        return;
-      }
-      if (bytes > SOFT_WARN_BYTES) {
-        // window.confirm so the user can't dismiss it accidentally — at this
-        // size the zip buffers in memory and the browser will stutter.
-        toast.dismiss(toastId);
-        const ok = window.confirm(
-          `This ZIP will be ~${formatBytes(bytes)} (${formatCount(zipEntries.length)} files). It buffers in memory before downloading. Continue?`
-        );
-        if (!ok) return;
-      }
-      toast.loading(
-        `Bundling ${formatCount(zipEntries.length)} file${zipEntries.length === 1 ? "" : "s"} (${formatBytes(bytes)})…`,
-        { id: toastId }
-      );
-      // Single-folder selection: name the zip after the folder. Otherwise
-      // fall back to a bucket-stamped filename so the OS doesn't keep
-      // suggesting "selection.zip" for every download.
-      const filename = (() => {
-        if (targets.length === 1 && targets[0]!.type === "prefix") {
-          return `${basename(targets[0]!.prefix)}.zip`;
-        }
-        const date = new Date().toISOString().slice(0, 10);
-        return `${bucket}-${date}.zip`;
-      })();
-      await downloadEntriesAsZip(connectionId, bucket, zipEntries, filename);
-      toast.success("Download started", {
-        id: toastId,
-        description: filename,
-      });
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "ZIP failed", {
-        id: toastId,
-      });
-    }
-  };
-
-  /**
-   * Returns true on success, false otherwise. Errors toast; success is silent
-   * so callers can choose their own confirmation (inline button feedback vs.
-   * a success toast for the context-menu/shortcut paths that have no button
-   * to highlight).
-   */
-  const copyEntryLink = async (entry: S3Entry): Promise<boolean> => {
-    if (entry.type !== "object") {
-      toast.info("Folders don't have a shareable link");
-      return false;
-    }
-    try {
-      const { url } = await fetchDownloadUrl(connectionId, bucket, entry.key);
-      await navigator.clipboard.writeText(url);
-      return true;
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Couldn't copy link");
-      return false;
-    }
-  };
-
-  // Context-menu / ⌘C path — no on-screen button to flip into a "Copied"
-  // state, so we surface success via toast instead.
-  const handleCopyLink = async (entry: S3Entry) => {
-    const ok = await copyEntryLink(entry);
-    if (ok) toast.success("Link copied", { description: "Expires in 15 minutes" });
-  };
-
-  // ─── Upload flow ────────────────────────────────────────────────────────
-  // The browser doesn't do the upload anymore — it enqueues into the global
-  // upload store and the floating UploadPanel handles progress, retries,
-  // cancellation. We only listen for completions targeting *our* current
-  // prefix to invalidate the listing.
-  const normalizedPrefix = normalizePrefix(prefix);
-
-  React.useEffect(() => {
-    return onUploadCompleted((item) => {
-      if (
-        item.connectionId === connectionId &&
-        item.bucket === bucket &&
-        item.prefix === normalizedPrefix
-      ) {
-        queryClient.invalidateQueries({
-          queryKey: objectKeys.list(connectionId, bucket, prefix),
-        });
-      }
+  // ─── Selection + context-menu dispatch ──────────────────────────────────
+  const { handleSelectRow, handleSelectAll, handleContextAction } =
+    useObjectBrowserSelection({
+      selectedIdsRef,
+      visibleRef,
+      pendingIdsRef,
+      anchorRef,
+      setAnchor,
+      toggleSelection,
+      setManySelected,
+      clearSelection,
+      openPreview,
+      openShare,
+      downloadEntry,
+      handleDownloadSelected,
+      handleDownloadAsZip,
+      handleCopyLink,
+      handleOpenInNewTab,
+      setRenameTarget,
+      setRenameOpen,
+      setMoveOpen,
+      setCopyToOpen,
+      setDeleteOpen,
     });
-  }, [connectionId, bucket, prefix, normalizedPrefix, queryClient]);
-
-  const handleUploadFiles = (items: UploadInputFile[]) => {
-    const oversized = items.filter((it) => it.file.size > MAX_UPLOAD_BYTES);
-    if (oversized.length) {
-      toast.error(
-        `${oversized.length} file${oversized.length === 1 ? "" : "s"} exceed S3's 5 TB per-object limit`
-      );
-    }
-    let accepted = items.filter((it) => it.file.size <= MAX_UPLOAD_BYTES);
-    if (accepted.length === 0) return;
-
-    // Best-effort overwrite check against the currently-loaded listing. Only
-    // applies to *top-level* files — for folder uploads, subdirectory
-    // collisions live under not-yet-loaded prefixes and we'd be asking about
-    // files the user can't see. Folder-vs-folder merges are deferred to S3's
-    // own "last write wins" semantics.
-    if (usePrefsStore.getState().overwriteWarning) {
-      const existingNames = new Set(
-        entries
-          .filter((e): e is S3ObjectEntry => e.type === "object")
-          .map((e) => basename(e.key))
-      );
-      const topLevelColliders = accepted.filter(
-        (it) =>
-          !it.relativePath.includes("/") && existingNames.has(it.file.name)
-      );
-      if (topLevelColliders.length > 0) {
-        const sample = topLevelColliders
-          .slice(0, 5)
-          .map((it) => `  • ${it.file.name}`)
-          .join("\n");
-        const more =
-          topLevelColliders.length > 5
-            ? `\n  …and ${topLevelColliders.length - 5} more`
-            : "";
-        const ok = window.confirm(
-          `${topLevelColliders.length} file${topLevelColliders.length === 1 ? "" : "s"} already exist in this folder. Overwrite?\n\n${sample}${more}`
-        );
-        if (!ok) {
-          const skip = new Set(topLevelColliders.map((it) => it.file.name));
-          accepted = accepted.filter(
-            (it) => it.relativePath.includes("/") || !skip.has(it.file.name)
-          );
-          if (accepted.length === 0) return;
-        }
-      }
-    }
-
-    useUploadsStore.getState().actions.addFiles(
-      { connectionId, bucket, prefix: normalizedPrefix },
-      accepted
-    );
-  };
-
-  // ─── Dialog confirmation handlers ───────────────────────────────────────
-  const handleConfirmNewFolder = (name: string) => {
-    createFolder.mutate(
-      { prefix: normalizePrefix(prefix) + name },
-      { onSettled: () => setNewFolderOpen(false) }
-    );
-  };
-
-  const handleConfirmRename = async (newName: string) => {
-    if (!renameTarget || renameTarget.type !== "object") {
-      toast.error("Folder rename isn't supported yet");
-      setRenameOpen(false);
-      return;
-    }
-    const sourceKey = renameTarget.key;
-    const destKey = dirname(sourceKey) + newName;
-    if (destKey === sourceKey) {
-      setRenameOpen(false);
-      return;
-    }
-    try {
-      await copyObject.mutateAsync({ sourceKey, destKey });
-      await deleteObjects.mutateAsync({ keys: [sourceKey] });
-      toast.success("Renamed");
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Rename failed");
-    } finally {
-      setRenameOpen(false);
-      clearSelection();
-    }
-  };
-
-  const handleConfirmMove = async (destPrefix: string) => {
-    const targets = selectedEntries.filter(
-      (e): e is S3ObjectEntry => e.type === "object"
-    );
-    if (targets.length === 0) {
-      toast.warning("Folder moves aren't supported yet");
-      setMoveOpen(false);
-      return;
-    }
-    const dest = normalizePrefix(destPrefix);
-    const results = await Promise.allSettled(
-      targets.map(async (entry) => {
-        await copyObject.mutateAsync({
-          sourceKey: entry.key,
-          destKey: dest + basename(entry.key),
-        });
-        await deleteObjects.mutateAsync({ keys: [entry.key] });
-      })
-    );
-    const succeeded = results.filter((r) => r.status === "fulfilled").length;
-    const failed = results.length - succeeded;
-    if (failed === 0) {
-      toast.success(`Moved ${succeeded} file${succeeded === 1 ? "" : "s"}`);
-    } else {
-      toast.warning(`Moved ${succeeded}, ${failed} failed`);
-    }
-    setMoveOpen(false);
-    clearSelection();
-  };
-
-  const handleConfirmCopyTo = async (destPrefix: string) => {
-    const targets = selectedEntries.filter(
-      (e): e is S3ObjectEntry => e.type === "object"
-    );
-    if (targets.length === 0) {
-      toast.warning("Folder copy isn't supported yet");
-      setCopyToOpen(false);
-      return;
-    }
-    const dest = normalizePrefix(destPrefix);
-    const results = await Promise.allSettled(
-      targets.map((entry) =>
-        copyObject.mutateAsync({
-          sourceKey: entry.key,
-          destKey: dest + basename(entry.key),
-        })
-      )
-    );
-    const succeeded = results.filter((r) => r.status === "fulfilled").length;
-    const failed = results.length - succeeded;
-    if (failed === 0) {
-      toast.success(`Copied ${succeeded} file${succeeded === 1 ? "" : "s"}`);
-    } else {
-      toast.warning(`Copied ${succeeded}, ${failed} failed`);
-    }
-    setCopyToOpen(false);
-  };
-
-  const handleConfirmDelete = () => {
-    const keys = selectedEntries.map(entryId);
-    deleteObjects.mutate(
-      { keys },
-      {
-        onSuccess: (result) => {
-          const errors = result.errors.length;
-          if (errors > 0) {
-            toast.warning(
-              `Deleted ${result.deleted}, ${errors} failed`,
-              { description: result.errors[0]?.message }
-            );
-          } else {
-            toast.success(
-              `Deleted ${result.deleted} item${result.deleted === 1 ? "" : "s"}`
-            );
-          }
-          clearSelection();
-        },
-        onError: (e) => toast.error(e.message),
-        onSettled: () => setDeleteOpen(false),
-      }
-    );
-  };
-
-  // ─── Context-menu dispatch ──────────────────────────────────────────────
-  // Stable so the memoized ObjectList doesn't re-render when this changes
-  // identity. Routes through refs for the inner handlers (which are not
-  // themselves memoized) so we don't have to thread useCallback through
-  // every single per-entry action.
-  const contextHandlersRef = React.useRef({
-    downloadEntry,
-    handleDownloadSelected,
-    handleDownloadAsZip,
-    handleCopyLink,
-  });
-  contextHandlersRef.current = {
-    downloadEntry,
-    handleDownloadSelected,
-    handleDownloadAsZip,
-    handleCopyLink,
-  };
-
-  const handleContextAction = React.useCallback(
-    (entry: S3Entry, action: ContextAction) => {
-      const id = entryId(entry);
-      const sel = selectedIdsRef.current;
-      const h = contextHandlersRef.current;
-      const ensureInSelection = () => {
-        if (!sel.has(id)) {
-          setManySelected([id]);
-          setAnchor(id);
-        }
-      };
-
-      switch (action) {
-        case "preview": {
-          if (entry.type !== "object") return;
-          // Siblings = visible files (folders aren't previewable). Captured at
-          // open time so prev/next walks the user's current sort/filter view.
-          const siblings = visibleRef.current
-            .filter((e): e is S3ObjectEntry => e.type === "object")
-            .map((e) => e.key);
-          openPreview(entry.key, siblings);
-          return;
-        }
-        case "download":
-          if (sel.size > 1 && sel.has(id)) h.handleDownloadSelected();
-          else h.downloadEntry(entry);
-          return;
-        case "download-zip":
-          h.handleDownloadAsZip(entry);
-          return;
-        case "open-new-tab":
-          handleOpenInNewTab(entry);
-          return;
-        case "copy-link":
-          h.handleCopyLink(entry);
-          return;
-        case "share":
-          if (entry.type === "object") openShare(entry.key);
-          return;
-        case "rename":
-          setRenameTarget(entry);
-          setRenameOpen(true);
-          return;
-        case "move":
-          ensureInSelection();
-          setMoveOpen(true);
-          return;
-        case "copy-to":
-          ensureInSelection();
-          setCopyToOpen(true);
-          return;
-        case "delete":
-          ensureInSelection();
-          setDeleteOpen(true);
-          return;
-      }
-    },
-    [handleOpenInNewTab, setManySelected, openPreview, openShare]
-  );
-
-  // ─── Toolbar action delegates ───────────────────────────────────────────
-  const handleRenameFromToolbar = () => {
-    if (selectedEntries.length !== 1) return;
-    setRenameTarget(selectedEntries[0]!);
-    setRenameOpen(true);
-  };
-  const handleCopyLinkFromToolbar = async (): Promise<boolean> => {
-    if (selectedEntries.length !== 1) return false;
-    return copyEntryLink(selectedEntries[0]!);
-  };
-  const handleShareFromToolbar = () => {
-    const only = selectedEntries.length === 1 ? selectedEntries[0]! : null;
-    if (!only || only.type !== "object") return;
-    openShare(only.key);
-  };
-  const handlePreviewFromToolbar = () => {
-    const only = selectedEntries.length === 1 ? selectedEntries[0]! : null;
-    if (!only || only.type !== "object") return;
-    const siblings = visible
-      .filter((e): e is S3ObjectEntry => e.type === "object")
-      .map((e) => e.key);
-    openPreview(only.key, siblings);
-  };
-  const canPreviewFromToolbar =
-    selectedEntries.length === 1 && selectedEntries[0]!.type === "object";
-
-  // ─── Sort ───────────────────────────────────────────────────────────────
-  const handleSortChange = React.useCallback((key: ObjectSortKey) => {
-    if (key === sortKeyRef.current) {
-      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    } else {
-      setSortKey(key);
-      setSortDir("asc");
-    }
-  }, []);
 
   // ─── Keyboard shortcuts ─────────────────────────────────────────────────
-  // Bound once at mount and reads everything through a ref that's refreshed
-  // each render — same pattern as contextHandlersRef. Avoids re-binding the
-  // window listener for every selection change, which would be a ton of
-  // attach/detach churn on large lists.
-  const shortcutsRef = React.useRef({
+  useObjectBrowserKeyboard({
     previewOpenKey,
     selectedEntries,
+    selectedIdsRef,
+    visibleRef,
+    pendingIdsRef,
+    anchorRef,
+    openPickerRef,
+    filterInputRef,
+    setAnchor,
+    setNewFolderOpen,
+    setDeleteOpen,
+    setRenameOpen,
+    setRenameTarget,
+    handleSelectAll,
     handleCopyLink,
-  });
-  shortcutsRef.current = {
-    previewOpenKey,
-    selectedEntries,
-    handleCopyLink,
-  };
-
-  React.useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      const inEditable = isEditableTarget(e.target);
-      const mod = e.metaKey || e.ctrlKey;
-      const key = e.key;
-      const klow = key.toLowerCase();
-      const s = shortcutsRef.current;
-
-      // ⌘U — upload. Works from anywhere (the picker is benign even mid-typing).
-      if (mod && !e.shiftKey && !e.altKey && klow === "u") {
-        e.preventDefault();
-        openPickerRef.current?.();
-        return;
-      }
-
-      // ⌘⇧N — new folder.
-      if (mod && e.shiftKey && !e.altKey && klow === "n") {
-        e.preventDefault();
-        setNewFolderOpen(true);
-        return;
-      }
-
-      // ⌘A — select all visible. Skip inside text inputs so native select-all
-      // still works while the user is editing.
-      if (mod && !e.shiftKey && !e.altKey && klow === "a") {
-        if (inEditable) return;
-        e.preventDefault();
-        handleSelectAll(visibleRef.current);
-        return;
-      }
-
-      // ⌘C — copy public link for the single selected file. Yield to the
-      // browser if the user has a text selection or is in a text input —
-      // otherwise we'd hijack copy-text.
-      if (mod && !e.shiftKey && !e.altKey && klow === "c") {
-        if (inEditable) return;
-        const textSel = window.getSelection?.();
-        if (textSel && textSel.toString().length > 0) return;
-        const only =
-          s.selectedEntries.length === 1 ? s.selectedEntries[0] : null;
-        if (!only || only.type !== "object") return;
-        e.preventDefault();
-        s.handleCopyLink(only);
-        return;
-      }
-
-      // All remaining shortcuts: non-modifier and outside of editables.
-      if (mod || e.altKey) return;
-      if (inEditable) return;
-
-      // Esc — clear selection. Preview's own keydown owns Esc when open;
-      // bail so we don't also wipe the selection behind it.
-      if (key === "Escape") {
-        if (s.previewOpenKey !== null) return;
-        if (selectedIdsRef.current.size === 0) return;
-        e.preventDefault();
-        clearSelection();
-        setAnchor(null);
-        return;
-      }
-
-      // Del / Backspace — open the delete confirmation.
-      if (key === "Delete" || key === "Backspace") {
-        if (selectedIdsRef.current.size === 0) return;
-        e.preventDefault();
-        setDeleteOpen(true);
-        return;
-      }
-
-      // F2 — rename when exactly one item is selected.
-      if (key === "F2") {
-        if (s.selectedEntries.length !== 1) return;
-        e.preventDefault();
-        setRenameTarget(s.selectedEntries[0]!);
-        setRenameOpen(true);
-        return;
-      }
-
-      // Space — toggle preview. Opens for the single selected file, closes
-      // whatever's currently open.
-      if (key === " ") {
-        if (s.previewOpenKey !== null) {
-          e.preventDefault();
-          closePreview();
-          return;
-        }
-        const only =
-          s.selectedEntries.length === 1 ? s.selectedEntries[0] : null;
-        if (!only || only.type !== "object") return;
-        e.preventDefault();
-        const siblings = visibleRef.current
-          .filter((x): x is S3ObjectEntry => x.type === "object")
-          .map((x) => x.key);
-        openPreview(only.key, siblings);
-        return;
-      }
-
-      // / — focus the filter input. Skipped when the toolbar swapped it out
-      // for selection-mode UI (input isn't mounted, ref is null).
-      if (key === "/") {
-        const input = filterInputRef.current;
-        if (!input) return;
-        e.preventDefault();
-        input.focus();
-        input.select();
-        return;
-      }
-
-      // J/K + arrows — move the "cursor" by replacing selection with the
-      // adjacent visible entry. Preview owns these keys when it's open so it
-      // can step through siblings instead.
-      if (s.previewOpenKey !== null) return;
-      const goDown = key === "ArrowDown" || klow === "j";
-      const goUp = key === "ArrowUp" || klow === "k";
-      if (!goDown && !goUp) return;
-
-      const vis = visibleRef.current;
-      if (vis.length === 0) return;
-      // Arrow nav skips pending rows — landing on a non-selectable row
-      // would put the anchor somewhere selection can't act on.
-      const pending = pendingIdsRef.current;
-      const selectableVis =
-        pending.size === 0
-          ? vis
-          : vis.filter((entry) => !pending.has(entryId(entry)));
-      if (selectableVis.length === 0) return;
-      e.preventDefault();
-
-      const ids = selectableVis.map(entryId);
-      const cursor = anchorRef.current;
-      const cursorIdx = cursor ? ids.indexOf(cursor) : -1;
-      const nextIdx =
-        cursorIdx === -1
-          ? goDown
-            ? 0
-            : ids.length - 1
-          : goDown
-            ? Math.min(cursorIdx + 1, ids.length - 1)
-            : Math.max(cursorIdx - 1, 0);
-      const nextId = ids[nextIdx]!;
-      setManySelected([nextId]);
-      setAnchor(nextId);
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [
     clearSelection,
     closePreview,
-    handleSelectAll,
     openPreview,
     setManySelected,
-  ]);
-
-  // ─── Paste-from-clipboard upload ────────────────────────────────────────
-  // When the user pastes image bytes (Cmd/Ctrl-V or context-menu paste) into
-  // the object browser, route the blobs through the same upload queue as
-  // drag-drop and folder-picker. Short-circuit while the user is editing
-  // text — hijacking paste inside an input would surprise them. The handler
-  // also bails when a dialog is open (the dialog owns the focused input and
-  // its own paste behavior).
-  //
-  // Reads handleUploadFiles + prefix through a ref so the listener doesn't
-  // rebind on every render; addFiles already drains through Uppy with
-  // meta.relativePath set per convention #10.
-  const pasteRef = React.useRef({ handleUploadFiles, prefix });
-  pasteRef.current = { handleUploadFiles, prefix };
-
-  React.useEffect(() => {
-    const onPaste = (e: ClipboardEvent) => {
-      if (isEditableTarget(e.target)) return;
-      // Some browsers leave document.activeElement on a focused input even
-      // when the event target is the document; double-check.
-      if (isEditableTarget(document.activeElement)) return;
-      const items = e.clipboardData?.items;
-      if (!items || items.length === 0) return;
-      const files: UploadInputFile[] = [];
-      const stamp = nowStamp();
-      let idx = 0;
-      for (const it of Array.from(items)) {
-        if (it.kind !== "file") continue;
-        const blob = it.getAsFile();
-        if (!blob) continue;
-        // Only intercept image-type blobs — non-image pastes (e.g. a copied
-        // file from Finder) are rare and would surprise users by quietly
-        // queuing themselves. Drag-drop is the explicit path for that.
-        if (!blob.type.startsWith("image/")) continue;
-        const ext = extensionForMime(blob.type) ?? "bin";
-        const suffix = idx === 0 ? "" : `-${idx + 1}`;
-        const name = `pasted-${stamp}${suffix}.${ext}`;
-        // Re-wrap as a File so the rest of the upload pipeline (which reads
-        // .name) gets a friendly filename; the underlying blob bytes are
-        // unchanged.
-        const file = new File([blob], name, {
-          type: blob.type,
-          lastModified: Date.now(),
-        });
-        files.push({ file, relativePath: name });
-        idx += 1;
-      }
-      if (files.length === 0) return;
-      e.preventDefault();
-      pasteRef.current.handleUploadFiles(files);
-    };
-    window.addEventListener("paste", onPaste);
-    return () => window.removeEventListener("paste", onPaste);
-  }, []);
+  });
 
   // ─── Render ─────────────────────────────────────────────────────────────
   return (
@@ -1042,23 +275,13 @@ export function ObjectBrowser({
       openRef={openPickerRef}
       openFolderRef={openFolderPickerRef}
     >
-      <div className="border-border bg-background flex h-12 shrink-0 items-center justify-between gap-3 border-b px-4">
-        <BreadcrumbPath
-          bucket={bucket}
-          prefix={prefix}
-          onNavigatePrefix={navigateToPrefix}
-          onNavigateHome={() => navigate({ to: "/" })}
-        />
-        <button
-          type="button"
-          onClick={() => setBucketSettingsOpen(true)}
-          className="hover:bg-muted text-muted-foreground hover:text-foreground shrink-0 rounded p-1.5 focus:outline-none"
-          aria-label="Bucket settings"
-          title="Bucket settings (versioning, …)"
-        >
-          <Settings className="size-4" />
-        </button>
-      </div>
+      <ObjectBrowserHeader
+        bucket={bucket}
+        prefix={prefix}
+        onNavigatePrefix={navigateToPrefix}
+        onNavigateHome={() => navigate({ to: "/" })}
+        onOpenSettings={() => setBucketSettingsOpen(true)}
+      />
 
       <ObjectToolbar
         selectedCount={selectedIds.size}
@@ -1104,87 +327,44 @@ export function ObjectBrowser({
         onUploadClick={() => openPickerRef.current?.()}
       />
 
-      <AppStatusBar
-        left={
-          query.data ? (
-            <>
-              <span>
-                {formatCount(entries.length)} items
-                {filter && entries.length !== visible.length
-                  ? ` (${visible.length} shown)`
-                  : ""}
-                {query.hasNextPage ? "+" : ""}
-              </span>
-              <span>{formatBytes(totalBytes)} total</span>
-              {selectedIds.size > 0 && (
-                <span className="text-primary-text">
-                  {selectedIds.size} selected
-                </span>
-              )}
-            </>
-          ) : null
-        }
-        right={
-          <>
-            <span className="whitespace-nowrap">⌘K to search</span>
-            <span className="hidden whitespace-nowrap md:inline">
-              · shift-click for range · drag to upload
-            </span>
-          </>
-        }
+      <ObjectBrowserStatusBar
+        hasData={!!query.data}
+        entryCount={entries.length}
+        visibleCount={visible.length}
+        totalBytes={totalBytes}
+        selectedSize={selectedIds.size}
+        filter={filter}
+        hasNextPage={!!query.hasNextPage}
       />
 
-      <NewFolderDialog
-        open={newFolderOpen}
-        onOpenChange={setNewFolderOpen}
-        basePrefix={prefix}
-        pending={createFolder.isPending}
-        onSubmit={handleConfirmNewFolder}
-      />
-      <RenameDialog
-        open={renameOpen}
-        onOpenChange={setRenameOpen}
-        initialName={renameTarget ? basename(entryId(renameTarget)) : ""}
-        pending={copyObject.isPending || deleteObjects.isPending}
-        onSubmit={handleConfirmRename}
-      />
-      <MovePromptDialog
-        open={moveOpen}
-        onOpenChange={setMoveOpen}
-        defaultPrefix={prefix}
-        count={selectedIds.size}
-        pending={copyObject.isPending || deleteObjects.isPending}
-        onSubmit={handleConfirmMove}
-        mode="move"
-      />
-      <MovePromptDialog
-        open={copyToOpen}
-        onOpenChange={setCopyToOpen}
-        defaultPrefix={prefix}
-        count={selectedIds.size}
-        pending={copyObject.isPending}
-        onSubmit={handleConfirmCopyTo}
-        mode="copy"
-      />
-      <ConfirmDeleteDialog
-        open={deleteOpen}
-        onOpenChange={setDeleteOpen}
-        count={selectedIds.size}
-        pending={deleteObjects.isPending}
-        onConfirm={handleConfirmDelete}
-      />
-      <BucketSettingsDialog
-        open={bucketSettingsOpen}
-        onOpenChange={setBucketSettingsOpen}
-        connectionId={connectionId}
-        bucket={bucket}
-      />
-      <UploadFromUrlDialog
-        open={uploadFromUrlOpen}
-        onOpenChange={setUploadFromUrlOpen}
+      <ObjectBrowserDialogs
         connectionId={connectionId}
         bucket={bucket}
         prefix={prefix}
+        selectedCount={selectedIds.size}
+        renameTarget={renameTarget}
+        newFolderOpen={newFolderOpen}
+        renameOpen={renameOpen}
+        moveOpen={moveOpen}
+        copyToOpen={copyToOpen}
+        deleteOpen={deleteOpen}
+        bucketSettingsOpen={bucketSettingsOpen}
+        uploadFromUrlOpen={uploadFromUrlOpen}
+        createFolderPending={createFolderPending}
+        copyObjectPending={copyObjectPending}
+        deleteObjectsPending={deleteObjectsPending}
+        setNewFolderOpen={setNewFolderOpen}
+        setRenameOpen={setRenameOpen}
+        setMoveOpen={setMoveOpen}
+        setCopyToOpen={setCopyToOpen}
+        setDeleteOpen={setDeleteOpen}
+        setBucketSettingsOpen={setBucketSettingsOpen}
+        setUploadFromUrlOpen={setUploadFromUrlOpen}
+        onConfirmNewFolder={handleConfirmNewFolder}
+        onConfirmRename={handleConfirmRename}
+        onConfirmMove={handleConfirmMove}
+        onConfirmCopyTo={handleConfirmCopyTo}
+        onConfirmDelete={handleConfirmDelete}
       />
     </UploadDropzone>
   );
@@ -1331,31 +511,4 @@ function BodyRenderer(props: {
     );
   }
   return <ObjectList {...props} />;
-}
-
-/** File-safe ISO-ish timestamp for `pasted-${stamp}.png` keys. Colons are
- *  legal in S3 but awkward on Windows downloads, so we substitute hyphens. */
-function nowStamp(): string {
-  return new Date().toISOString().replace(/[:.]/g, "-");
-}
-
-/**
- * Map common image MIME types to a sensible file extension. The fallback is
- * undefined (caller falls back to "bin") so an exotic clipboard MIME doesn't
- * land as a misleading `.png`.
- */
-function extensionForMime(mime: string): string | undefined {
-  const m = mime.toLowerCase();
-  if (m === "image/png") return "png";
-  if (m === "image/jpeg" || m === "image/jpg") return "jpg";
-  if (m === "image/gif") return "gif";
-  if (m === "image/webp") return "webp";
-  if (m === "image/avif") return "avif";
-  if (m === "image/bmp") return "bmp";
-  if (m === "image/svg+xml") return "svg";
-  if (m === "image/heic") return "heic";
-  if (m === "image/heif") return "heif";
-  if (m === "image/tiff") return "tiff";
-  if (m.startsWith("image/")) return m.slice("image/".length);
-  return undefined;
 }

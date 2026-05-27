@@ -68,8 +68,17 @@ correct identity here.
 
 ## react-doctor/no-giant-component — `ObjectBrowser`
 
-`src/components/object-browser.tsx` (1107 lines). Real architectural smell,
-but breaking it apart is a larger refactor than this pass. Tracked separately.
+`src/components/object-browser.tsx`. Broken up across two passes:
+
+- **Pass 1 (handoff)** — 1107-line component, extraction deferred.
+- **Pass 2** — extracted seven hooks (`use-object-browser-{actions, data,
+  downloads, keyboard, mutations, selection, uploads}.ts`), a sibling
+  component file (`object-browser-dialogs.tsx`) holding the dialog stack,
+  header, and status bar, and consolidated derived data. ObjectBrowser is
+  now composition + render. Function body is 326 lines (mostly hook
+  invocations + JSX prop wiring) and the rule still flags it; pushing
+  further by extracting a single mega-shell adds more `unused-file` FPs
+  than it removes warnings, so this is the stopping point.
 
 ## react-doctor/prefer-tag-over-role — clickable cards with nested buttons
 
