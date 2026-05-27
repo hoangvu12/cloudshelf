@@ -11,6 +11,7 @@ import {
   abortMultipartUpload,
   completeMultipartUpload,
   copyObjectForConnection,
+  createBucketForConnection,
   createFolderForConnection,
   createMultipartUpload,
   deleteObjectsForConnection,
@@ -117,6 +118,29 @@ connectionsRoute.get("/:id/buckets", async (c) => {
       },
       502
     );
+  }
+});
+
+const createBucketSchema = z.object({ name: z.string().trim().min(1) });
+
+/**
+ * Create a new bucket. Naming validity is enforced client-side; here we just
+ * pass it through and bubble S3's own errors (e.g. BucketAlreadyExists) so the
+ * user sees the real reason rather than a generic 400.
+ */
+connectionsRoute.post("/:id/buckets", async (c) => {
+  const conn = getConnection(c.req.param("id"));
+  if (!conn) return c.json({ error: "Not found" }, 404);
+  const body = await c.req.json().catch(() => null);
+  const parsed = createBucketSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json({ error: "Invalid payload", detail: parsed.error.message }, 400);
+  }
+  try {
+    const result = await createBucketForConnection(conn, parsed.data.name);
+    return c.json(result, 201);
+  } catch (err) {
+    return c.json(upstreamError(err), 502);
   }
 });
 

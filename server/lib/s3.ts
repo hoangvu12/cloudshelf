@@ -2,6 +2,7 @@ import {
   AbortMultipartUploadCommand,
   CompleteMultipartUploadCommand,
   CopyObjectCommand,
+  CreateBucketCommand,
   CreateMultipartUploadCommand,
   DeleteObjectsCommand,
   GetObjectCommand,
@@ -82,6 +83,27 @@ export async function listBucketsForConnection(
         createdAt:
           b.CreationDate?.toISOString() ?? new Date(0).toISOString(),
       }));
+  } finally {
+    client.destroy();
+  }
+}
+
+/**
+ * Create a new bucket under a saved connection. Region is taken from the
+ * connection's S3 client; we deliberately don't set a LocationConstraint here
+ * because (a) for most S3-compatible endpoints it's ignored, and (b) for AWS,
+ * the SDK already passes the client's region. Naming rules are validated on
+ * the client; we surface any upstream error verbatim so users see the real
+ * reason (BucketAlreadyExists, InvalidBucketName, …).
+ */
+export async function createBucketForConnection(
+  conn: S3Connection,
+  name: string
+): Promise<{ name: string }> {
+  const client = createS3Client(conn);
+  try {
+    await client.send(new CreateBucketCommand({ Bucket: name }));
+    return { name };
   } finally {
     client.destroy();
   }

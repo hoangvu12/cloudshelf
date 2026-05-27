@@ -6,7 +6,12 @@
  * in the bucket list response. The UI shows "—" for missing values.
  */
 
-import { useQuery } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type UseMutationOptions,
+} from "@tanstack/react-query";
 import { apiFetch } from "./client";
 import type { Bucket } from "@server/types";
 
@@ -22,5 +27,28 @@ export function useBuckets(connectionId: string | null | undefined) {
       return apiFetch<Bucket[]>(`/connections/${connectionId}/buckets`);
     },
     enabled: !!connectionId,
+  });
+}
+
+export function useCreateBucket(
+  connectionId: string | null | undefined,
+  options?: UseMutationOptions<{ name: string }, Error, { name: string }>
+) {
+  const qc = useQueryClient();
+  return useMutation({
+    ...options,
+    mutationFn: ({ name }) => {
+      if (!connectionId) throw new Error("connectionId required");
+      return apiFetch<{ name: string }>(`/connections/${connectionId}/buckets`, {
+        method: "POST",
+        body: { name },
+      });
+    },
+    onSuccess: (...args) => {
+      if (connectionId) {
+        qc.invalidateQueries({ queryKey: bucketKeys.all(connectionId) });
+      }
+      return options?.onSuccess?.(...args);
+    },
   });
 }

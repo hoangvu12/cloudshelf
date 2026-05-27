@@ -1,5 +1,6 @@
 import * as React from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { toast } from "sonner";
 import { Database, Plug, ServerCrash, ServerOff } from "@/lib/icons";
 
 import { AppShell, AppStatusBar } from "@/components/app-shell";
@@ -7,13 +8,14 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { BreadcrumbPath } from "@/components/breadcrumb-path";
 import { BucketList } from "@/components/bucket-list";
 import { BucketGrid } from "@/components/bucket-grid";
+import { CreateBucketDialog } from "@/components/bucket-dialogs";
 import {
   CommandPalette,
   useCommandPaletteShortcut,
 } from "@/components/command-palette";
 import { DataToolbar, PrimaryAction } from "@/components/data-toolbar";
 import { EmptyState } from "@/components/empty-state";
-import { useBuckets } from "@/lib/api/buckets";
+import { useBuckets, useCreateBucket } from "@/lib/api/buckets";
 import { useConnections } from "@/lib/api/connections";
 import { formatBytes, formatCount } from "@/lib/format";
 import { useTrackNavEntry } from "@/lib/nav-history";
@@ -57,6 +59,15 @@ function HomePage() {
 
   const [filter, setFilter] = React.useState("");
   const [paletteOpen, setPaletteOpen] = useCommandPaletteShortcut();
+  const [createBucketOpen, setCreateBucketOpen] = React.useState(false);
+
+  const createBucket = useCreateBucket(activeId, {
+    onSuccess: ({ name }) => {
+      toast.success(`Bucket "${name}" created`);
+      setCreateBucketOpen(false);
+    },
+    onError: (err) => toast.error(err.message),
+  });
 
   const totalBytes = buckets.reduce((sum, b) => sum + (b.sizeBytes ?? 0), 0);
 
@@ -85,7 +96,10 @@ function HomePage() {
         filter={filter}
         onFilterChange={setFilter}
         primaryAction={
-          <PrimaryAction onClick={() => setPaletteOpen(true)}>
+          <PrimaryAction
+            onClick={() => setCreateBucketOpen(true)}
+            disabled={!activeId}
+          >
             New bucket
           </PrimaryAction>
         }
@@ -98,6 +112,7 @@ function HomePage() {
         filter={filter}
         onTogglePin={(name) => activeId && togglePin(activeId, name)}
         onAddConnection={() => navigate({ to: "/setup" })}
+        onCreateBucket={() => setCreateBucketOpen(true)}
         onOpenBucket={(name) =>
           navigate({
             to: "/buckets/$bucketName/$",
@@ -128,6 +143,13 @@ function HomePage() {
             params: { bucketName: name, _splat: "" },
           })
         }
+      />
+
+      <CreateBucketDialog
+        open={createBucketOpen}
+        onOpenChange={setCreateBucketOpen}
+        pending={createBucket.isPending}
+        onSubmit={(name) => createBucket.mutate({ name })}
       />
     </AppShell>
   );
@@ -178,6 +200,7 @@ function BucketsMain({
   filter,
   onTogglePin,
   onAddConnection,
+  onCreateBucket,
   onOpenBucket,
 }: {
   state: PageState;
@@ -186,6 +209,7 @@ function BucketsMain({
   filter: string;
   onTogglePin: (name: string) => void;
   onAddConnection: () => void;
+  onCreateBucket: () => void;
   onOpenBucket: (name: string) => void;
 }) {
   switch (state.kind) {
@@ -242,7 +266,7 @@ function BucketsMain({
           title="No buckets"
           description="This connection doesn't have any buckets yet."
           action={
-            <PrimaryAction onClick={() => console.log("create bucket")}>
+            <PrimaryAction onClick={onCreateBucket}>
               Create bucket
             </PrimaryAction>
           }

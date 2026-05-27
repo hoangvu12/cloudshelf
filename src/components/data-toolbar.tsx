@@ -144,16 +144,19 @@ export function PrimaryAction({
   icon = <FolderPlus className="size-3.5" />,
   children,
   onClick,
+  disabled,
 }: {
   icon?: React.ReactNode;
   children: React.ReactNode;
   onClick?: () => void;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="bg-primary text-primary-foreground flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-bold transition-opacity hover:opacity-90 focus:outline-none"
+      disabled={disabled}
+      className="bg-primary text-primary-foreground flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-bold transition-opacity hover:opacity-90 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:opacity-50"
     >
       {icon}
       {children}
