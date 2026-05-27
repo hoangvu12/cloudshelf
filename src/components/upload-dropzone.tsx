@@ -120,13 +120,21 @@ export function UploadDropzone({
 
 /** Normalize the various sources of "where did this file come from" into a
  *  single relativePath. file-selector's `.path` is leading-slashed; the input
- *  flow uses `webkitRelativePath`; bare drops fall back to `file.name`. */
+ *  flow uses `webkitRelativePath`; bare drops fall back to `file.name`.
+ *
+ *  Strip both `/` and `./` prefixes: file-selector falls back to
+ *  `"./" + file.name` when neither a drag path nor `webkitRelativePath` is
+ *  set (i.e. the plain file-picker flow). A leading `./` survives as part of
+ *  the S3 key, and AWS SDK presigning encodes it literally into the canonical
+ *  URI while S3 normalizes `./` away server-side — those two diverge and the
+ *  upload fails with "signature does not match". Match a sequence of
+ *  `/`/`.` so `./`, `/./`, `..//` etc. all flatten before the key is built. */
 function asInputFile(file: File): UploadInputFile {
   const withPath = file as FileWithPath & { webkitRelativePath?: string };
   const raw =
     (withPath.webkitRelativePath && withPath.webkitRelativePath.length > 0
       ? withPath.webkitRelativePath
       : withPath.path) ?? file.name;
-  const relativePath = raw.replace(/^\/+/, "");
+  const relativePath = raw.replace(/^(?:\.?\/)+/, "");
   return { file, relativePath };
 }
