@@ -8,7 +8,7 @@ import { fileAppearance } from "@/lib/file-types";
 import { entryDisplayName, entryId } from "@/lib/object-path";
 import { ObjectListContextMenu } from "@/components/object-context-menu";
 import { Checkbox } from "@/components/ui/checkbox";
-import { useIsSelected } from "@/stores/selection";
+import { useHasSelection, useIsSelected } from "@/stores/selection";
 import { usePrefsStore } from "@/stores/prefs";
 import {
   usePendingByEntryId,
@@ -233,6 +233,7 @@ function ObjectTileImpl({
 }) {
   const id = entryId(entry);
   const selected = useIsSelected(id);
+  const hasSelection = useHasSelection();
   // `enabled = isPending` makes the selector a no-op for non-pending tiles.
   const pendingDisplay = usePendingByEntryId(connectionId, bucket, id, isPending);
   const actions = useUploadsStore((s) => s.actions);
@@ -254,6 +255,12 @@ function ObjectTileImpl({
     if (pendingDisplay) return;
     const mods = { shift: e.shiftKey, meta: e.metaKey || e.ctrlKey };
     if (!mods.shift && !mods.meta) {
+      // In selection mode (at least one row selected), plain click toggles
+      // instead of activating — matches Finder/Files behavior.
+      if (hasSelection) {
+        onSelectRow(entry, { shift: false, meta: true });
+        return;
+      }
       onOpen(entry);
       return;
     }

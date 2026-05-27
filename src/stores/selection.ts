@@ -29,3 +29,14 @@ export const useSelectionStore = create<SelectionState>((set) => ({
 export function useIsSelected(id: string): boolean {
   return useSelectionStore((s) => s.selected.has(id));
 }
+
+/**
+ * "Selection mode" flag — true when at least one row is selected. Rows
+ * subscribe to this so a plain click can switch from activate (open file /
+ * navigate folder) to toggle-select. Returning a boolean means Object.is
+ * bails out except on the 0↔non-zero transition, so rows only re-render
+ * when the mode actually flips.
+ */
+export function useHasSelection(): boolean {
+  return useSelectionStore((s) => s.selected.size > 0);
+}

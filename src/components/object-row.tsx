@@ -10,7 +10,7 @@ import { PendingBadge } from "@/components/object-row-cells/pending-badge";
 import { SizeContent } from "@/components/object-row-cells/size-content";
 import { ModifiedContent } from "@/components/object-row-cells/modified-content";
 import { FailedActions } from "@/components/object-row-cells/failed-actions";
-import { useIsSelected } from "@/stores/selection";
+import { useHasSelection, useIsSelected } from "@/stores/selection";
 import { usePendingByEntryId } from "@/stores/uploads";
 import type { S3Entry } from "@server/types";
 
@@ -67,6 +67,7 @@ function ObjectRowImpl({
 }) {
   const id = entryId(entry);
   const selected = useIsSelected(id);
+  const hasSelection = useHasSelection();
   // `enabled = isPending` makes the selector a no-op for non-pending rows,
   // so progress ticks don't ripple through every visible row.
   const pendingDisplay = usePendingByEntryId(connectionId, bucket, id, isPending);
@@ -84,6 +85,12 @@ function ObjectRowImpl({
     if (pendingDisplay) return;
     const mods = { shift: e.shiftKey, meta: e.metaKey || e.ctrlKey };
     if (!mods.shift && !mods.meta) {
+      // In selection mode (at least one row selected), plain click toggles
+      // instead of activating — matches Finder/Files behavior.
+      if (hasSelection) {
+        onSelectRow(entry, { shift: false, meta: true });
+        return;
+      }
       onOpen(entry);
       return;
     }
