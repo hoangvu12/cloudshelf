@@ -7,6 +7,7 @@ import {
   Plus,
   Server,
   Settings,
+  Terminal,
 } from "@/lib/icons";
 
 import { cn } from "@/lib/utils";
@@ -19,6 +20,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useLogout, useMe } from "@/lib/api/auth";
+import { useSnippetsStore } from "@/stores/snippets";
 import type { S3Connection } from "@server/types";
 
 interface PlaceItem {
@@ -187,6 +189,7 @@ function ActiveConnectionSwitcher({
   activeConnection: S3Connection | null;
   onSelectConnection?: (id: string) => void;
 }) {
+  const openSnippets = useSnippetsStore((s) => s.open);
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -231,6 +234,14 @@ function ActiveConnectionSwitcher({
           </DropdownMenuItem>
         ))}
         <DropdownMenuSeparator />
+        {activeConnection && (
+          <DropdownMenuItem
+            onSelect={() => openSnippets(activeConnection.id)}
+          >
+            <Terminal className="size-4" />
+            CLI snippets
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem asChild>
           <Link to="/setup" className="flex items-center gap-2">
             <Plus className="size-4" />

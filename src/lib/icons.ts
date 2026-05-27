@@ -77,6 +77,7 @@ export { default as LogOut } from "@material-symbols/svg-400/outlined/logout-fil
 export { default as Eye } from "@material-symbols/svg-400/outlined/visibility-fill.svg?react";
 export { default as EyeOff } from "@material-symbols/svg-400/outlined/visibility_off-fill.svg?react";
 export { default as CheckSquare } from "@material-symbols/svg-400/outlined/check_box-fill.svg?react";
+export { default as Terminal } from "@material-symbols/svg-400/outlined/terminal-fill.svg?react";
 
 // Settings / meta
 export { default as Settings } from "@material-symbols/svg-400/outlined/settings-fill.svg?react";

@@ -16,6 +16,7 @@ import {
   Monitor,
   Plus,
   Server,
+  Terminal,
   Trash2,
   UploadCloud,
 } from "@/lib/icons";
@@ -32,6 +33,7 @@ import { cn } from "@/lib/utils";
 import { SHORTCUTS } from "@/lib/shortcuts";
 import { useActiveConnectionStore } from "@/stores/active-connection";
 import { usePrefsStore, type ViewMode, type RowDensity } from "@/stores/prefs";
+import { useSnippetsStore } from "@/stores/snippets";
 import type { S3Connection } from "@server/types";
 
 type Section = "appearance" | "uploads" | "profiles" | "keyboard" | "about";
@@ -297,6 +299,7 @@ function ProfilesSection({
   const navigate = useNavigate();
   const deleteConnection = useDeleteConnection();
   const setActive = useActiveConnectionStore((s) => s.setActive);
+  const openSnippets = useSnippetsStore((s) => s.open);
 
   const onDelete = (c: S3Connection) => {
     const ok = window.confirm(
@@ -373,6 +376,14 @@ function ProfilesSection({
                   Activate
                 </button>
               )}
+              <button
+                type="button"
+                onClick={() => openSnippets(c.id)}
+                className="text-muted-foreground hover:bg-surface-1 hover:text-foreground rounded p-2 transition-colors"
+                title="CLI snippets"
+              >
+                <Terminal className="size-4" />
+              </button>
               <button
                 type="button"
                 onClick={() => navigate({ to: "/setup" })}

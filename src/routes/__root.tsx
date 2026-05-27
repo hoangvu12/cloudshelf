@@ -5,6 +5,7 @@ import {
   useLocation,
   useNavigate,
 } from "@tanstack/react-router";
+import { ConnectionSnippetsDialog } from "@/components/connection-snippets";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { UploadPanel } from "@/components/upload-panel";
@@ -26,6 +27,7 @@ function RootLayout() {
         {/* Lives at the root so in-flight uploads survive navigation between buckets/prefixes. */}
         <UploadPanel />
         <ShortcutsDialog open={helpOpen} onOpenChange={setHelpOpen} />
+        <ConnectionSnippetsDialog />
       </AuthGate>
       <Toaster position="bottom-right" richColors closeButton />
     </TooltipProvider>

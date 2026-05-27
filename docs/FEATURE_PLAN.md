@@ -445,14 +445,105 @@ to extract yet.
 
 None directly — Phase 4 was a no-deps leaf.
 
-### Eligibility snapshot (as of Phase 4 ship)
+### Phase 15 — shipped ✅ (commit `feat(connections): CLI snippets dialog`)
+
+Shipped close to spec. The dialog renders `aws-cli`, `boto3`, `mc`, and
+`rclone` snippets sourced from the saved connection, with the secret key
+masked-by-default + Reveal/Hide toggle. Copy always copies the *real*
+snippet (including the secret), so users don't have to reveal first.
+
+**`src/stores/snippets.ts` (new):**
+
+- Tiny zustand store `{ openConnectionId, open(id), close }` — same shape
+  as `usePreviewStore` / `useShareStore` per convention #7.
+
+**`src/components/connection-snippets.tsx` (new):**
+
+- `<ConnectionSnippetsDialog>` — radix Dialog, sm:max-w-2xl. Reads the
+  active connection out of `useConnections()` cache by `openConnectionId`.
+- Four tab triggers via `Tabs` from `ui/tabs`, each driving a
+  `HighlightedBlock` that runs the snippet through the existing
+  `highlightToTokens` Shiki worker (`bash` for aws/mc, `python` for boto3,
+  `ini` for rclone). Falls through to plain `<pre>` text while the worker
+  tokenizes or if it errors — no second highlighter instance, no extra
+  bundle weight beyond the lang grammars already split out by
+  `LANG_LOADERS`.
+- Reveal/Hide is a Button on the toolbar row next to Copy. When hidden the
+  snippet body shows `********` in place of `secretAccessKey`; the Copy
+  button still writes the real secret to the clipboard.
+- `boto3` snippet sets `addressing_style: "path"` when the connection has
+  `forcePathStyle`; `rclone` snippet appends `force_path_style = true` in
+  the same case. `mc` snippet pins `--api S3v4` so the alias is
+  deterministic across mc versions.
+- A muted footer note explains "Copy includes the real secret even while
+  hidden. Treat the snippet like a credential."
+
+**Mount + entry points:**
+
+- `src/routes/__root.tsx` — `<ConnectionSnippetsDialog />` mounted once
+  next to `<UploadPanel />` and `<ShortcutsDialog />` so it's reachable
+  from any route.
+- `src/components/app-sidebar.tsx` — `ActiveConnectionSwitcher` dropdown
+  now has a "CLI snippets" item (new `Terminal` icon) below the
+  separator, opening for the *currently active* connection. Hidden when
+  no connection is active.
+- `src/routes/settings.tsx` — each profile row in the Profiles section
+  gets a hover-visible `Terminal` button between Activate and Edit,
+  opening snippets for *that* specific profile (no need to activate it
+  first).
+
+**`src/lib/icons.ts`:**
+
+- Added `Terminal` (Material Symbols `terminal-fill`).
+
+**Deviation from spec:** none on UX; one positive expansion — the spec
+just said "render snippets" but I plugged them into the shared Shiki
+worker (`highlightToTokens` from `src/lib/highlighter.ts`) so the colors
+match the file-preview text view exactly. Three of the four grammars
+(`bash`, `python`, `ini`) were already in `EXT_TO_LANG` / `LANG_LOADERS`
+from Phase 1's text-preview work, so this added zero new Shiki chunks.
+
+**Two layout gotchas worth remembering** (relevant any time a future
+phase puts a long-line `<pre>` inside a radix Dialog):
+
+1. `<pre className="whitespace-pre overflow-auto">` requests its
+   intrinsic content width, and grid items inside `DialogContent`
+   default to `min-width: auto` — which lets the pre stretch the whole
+   dialog past `sm:max-w-2xl`. Fix is `min-w-0` on every ancestor of
+   the pre inside the dialog body (outer wrapper, `Tabs` root, the
+   toolbar flex row, `TabsContent`), plus `shrink-0` on any toolbar
+   button cluster you want pinned to the right edge.
+2. radix's `react-remove-scroll` wrapper around the Dialog can swallow
+   wheel events on elements that have horizontal overflow but no
+   vertical overflow. Native shift+wheel translation breaks. The fix
+   in `connection-snippets.tsx` is a small `onWheel` on the pre that
+   reads `e.deltaX` (trackpads) or, when `e.shiftKey` is held, treats
+   `e.deltaY` as horizontal — then sets `scrollLeft` and
+   `preventDefault()`. Reuse this verbatim for any other in-dialog
+   horizontally-scrollable code/log surface (Phase 8 policy JSON
+   editor will hit this; Phase 11 in-dialog text editor probably
+   won't, since Monaco owns its own scroll).
+
+### Conventions earned in Phase 15 — reuse in later phases
+
+None new — Phase 15 is small and additive. The Shiki integration is
+specific to "show static code"; the existing virtualized `VirtualText`
+in `file-preview-panel.tsx` is still the right pattern for *large*
+file bodies. The simpler non-virtualized `HighlightedBlock` in
+`connection-snippets.tsx` is fine for fixed-size snippet text and
+shouldn't be lifted into a shared helper yet — wait for a third caller.
+
+### Phases unblocked by Phase 15
+
+None directly.
+
+### Eligibility snapshot (as of Phase 15 ship)
 
 Pickable now, in rough recommend-first order:
 
 - **5** Versioning view + restore (M, unblocked by Phase 1)
 - **14** EXIF panel for images (S, unblocked by Phase 1)
 - **9** Storage class on upload (S, no deps)
-- **15** Connection snippet panel (S, no deps)
 - **16** Paste / URL upload (S, no deps — reuse Phase-3 `UploadInputFile`)
 - **17** Activity log (S, no deps)
 - **20** Range-GET video player polish (S, no deps)
@@ -479,7 +570,7 @@ Pickable now, in rough recommend-first order:
 | 12 | Office doc preview                   | S      | —          |
 | 13 | Public "shelf" galleries             | M      | 2          |
 | 14 | EXIF panel for images                | S      | 1          |
-| 15 | Connection snippet panel             | S      | —          |
+| 15 | Connection snippet panel             | S      | —          | ✅ shipped (see §0.5) |
 | 16 | Paste / URL upload                   | S      | —          |
 | 17 | Activity log                         | S      | —          |
 | 18 | Password-protected share links       | M      | 2          |
