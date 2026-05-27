@@ -34,18 +34,15 @@ export interface TestConnectionResult {
 }
 
 /**
- * One S3 bucket as the UI cares about it. Returned from GET /api/connections/:id/buckets
- * (endpoint not yet implemented — the UI currently uses a mock).
+ * One S3 bucket as the UI cares about it. Returned from GET /api/connections/:id/buckets.
+ * Size and object count are intentionally not included — S3's ListBuckets doesn't return
+ * them, and computing per-bucket totals isn't worth N×ListObjectsV2 paginations.
  */
 export interface Bucket {
   /** Bucket name, also used as the stable id within a connection. */
   name: string;
   /** ISO 8601 creation timestamp returned by S3. */
   createdAt: string;
-  /** Total size in bytes. May be omitted when the server can't compute it cheaply. */
-  sizeBytes?: number;
-  /** Object count. May be omitted when the server can't compute it cheaply. */
-  objectCount?: number;
 }
 
 /** Uniform error envelope returned by the API on 4xx/5xx. */

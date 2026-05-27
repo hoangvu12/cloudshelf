@@ -10,7 +10,6 @@ import {
 } from "@/lib/icons";
 
 import { cn } from "@/lib/utils";
-import { formatBytes } from "@/lib/format";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -39,19 +38,11 @@ export function AppSidebar({
   connections,
   activeConnection,
   onSelectConnection,
-  storageUsedBytes = 0,
-  storageTotalBytes,
 }: {
   connections: S3Connection[];
   activeConnection: S3Connection | null;
   onSelectConnection?: (id: string) => void;
-  storageUsedBytes?: number;
-  /** Optional plan cap. When omitted, uses a 2 TB soft default. */
-  storageTotalBytes?: number;
 }) {
-  const cap = storageTotalBytes ?? 2 * 1024 ** 4;
-  const pct = Math.min(100, Math.round((storageUsedBytes / cap) * 100));
-
   return (
     <aside className="bg-card/80 border-border hidden w-56 shrink-0 flex-col border-r md:flex">
       <div className="border-border flex h-14 items-center gap-2 border-b px-4">
@@ -95,24 +86,12 @@ export function AppSidebar({
         </div>
       </div>
 
-      <SignedInFooter
-        storageUsedBytes={storageUsedBytes}
-        storageTotalBytes={storageTotalBytes}
-        pct={pct}
-      />
+      <SignedInFooter />
     </aside>
   );
 }
 
-function SignedInFooter({
-  storageUsedBytes,
-  storageTotalBytes,
-  pct,
-}: {
-  storageUsedBytes: number;
-  storageTotalBytes?: number;
-  pct: number;
-}) {
+function SignedInFooter() {
   const me = useMe();
   const logout = useLogout();
   const navigate = useNavigate();
@@ -123,40 +102,27 @@ function SignedInFooter({
     });
   };
 
+  if (!me.data) return null;
+
   return (
     <div className="border-border border-t p-4">
-      {me.data && (
-        <div className="mb-3 flex items-center justify-between gap-2">
-          <span
-            className="text-muted-foreground truncate text-xs"
-            title={me.data.user}
-          >
-            Signed in as{" "}
-            <span className="text-foreground font-medium">{me.data.user}</span>
-          </span>
-          <button
-            type="button"
-            onClick={onSignOut}
-            disabled={logout.isPending}
-            title="Sign out"
-            className="text-muted-foreground hover:bg-muted hover:text-destructive rounded p-1 transition-colors disabled:opacity-50"
-          >
-            <LogOut className="size-3.5" />
-          </button>
-        </div>
-      )}
-      <div className="mb-2 flex justify-between font-mono text-[10px]">
-        <span className="text-muted-foreground">
-          {formatBytes(storageUsedBytes)}
-          {storageTotalBytes ? ` / ${formatBytes(storageTotalBytes)}` : ""}
+      <div className="flex items-center justify-between gap-2">
+        <span
+          className="text-muted-foreground truncate text-xs"
+          title={me.data.user}
+        >
+          Signed in as{" "}
+          <span className="text-foreground font-medium">{me.data.user}</span>
         </span>
-        <span className="text-foreground">{pct}%</span>
-      </div>
-      <div className="bg-muted h-1 w-full overflow-hidden rounded-full">
-        <div
-          className="bg-primary-text h-1 rounded-full transition-[width] duration-300 ease-linear"
-          style={{ width: `${pct}%` }}
-        />
+        <button
+          type="button"
+          onClick={onSignOut}
+          disabled={logout.isPending}
+          title="Sign out"
+          className="text-muted-foreground hover:bg-muted hover:text-destructive rounded p-1 transition-colors disabled:opacity-50"
+        >
+          <LogOut className="size-3.5" />
+        </button>
       </div>
     </div>
   );

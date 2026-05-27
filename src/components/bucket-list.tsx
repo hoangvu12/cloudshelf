@@ -7,11 +7,11 @@ import {
 } from "@/lib/icons";
 
 import { cn } from "@/lib/utils";
-import { formatBytes, formatCount, formatFileTime } from "@/lib/format";
+import { formatFileTime } from "@/lib/format";
 import { usePrefsStore } from "@/stores/prefs";
 import type { Bucket } from "@server/types";
 
-type SortKey = "name" | "size" | "objects" | "created";
+type SortKey = "name" | "created";
 
 /**
  * Flat list with an optional pinned section first. Section divider matches the
@@ -81,8 +81,6 @@ function BucketListHeaders() {
     <div className="border-border text-foreground bg-card/30 flex shrink-0 border-b px-4 py-2 text-[11px] font-bold tracking-wider uppercase">
       <div className="w-8 shrink-0" />
       <div className="min-w-0 flex-1">Name</div>
-      <div className="w-20 text-right sm:w-24">Size</div>
-      <div className="hidden w-24 text-right md:block">Items</div>
       <div className="hidden w-32 text-right sm:block">Modified</div>
       <div className="hidden w-16 sm:block" />
     </div>
@@ -141,8 +139,6 @@ function BucketRow({
         </span>
       </div>
 
-      <Cell width="w-20 sm:w-24">{formatBytes(bucket.sizeBytes)}</Cell>
-      <Cell className="hidden md:block">{formatCount(bucket.objectCount)}</Cell>
       <Cell width="w-32" className="hidden sm:block">
         {formatFileTime(bucket.createdAt)}
       </Cell>
@@ -220,10 +216,6 @@ function compare(key: SortKey) {
     switch (key) {
       case "name":
         return a.name.localeCompare(b.name);
-      case "size":
-        return (b.sizeBytes ?? 0) - (a.sizeBytes ?? 0);
-      case "objects":
-        return (b.objectCount ?? 0) - (a.objectCount ?? 0);
       case "created":
         return (
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()

@@ -17,7 +17,7 @@ import { DataToolbar, PrimaryAction } from "@/components/data-toolbar";
 import { EmptyState } from "@/components/empty-state";
 import { useBuckets, useCreateBucket } from "@/lib/api/buckets";
 import { useConnections } from "@/lib/api/connections";
-import { formatBytes, formatCount } from "@/lib/format";
+import { formatCount } from "@/lib/format";
 import { useTrackNavEntry } from "@/lib/nav-history";
 import { useActiveConnectionStore } from "@/stores/active-connection";
 import { usePinnedBucketsStore } from "@/stores/pinned-buckets";
@@ -69,8 +69,6 @@ function HomePage() {
     onError: (err) => toast.error(err.message),
   });
 
-  const totalBytes = buckets.reduce((sum, b) => sum + (b.sizeBytes ?? 0), 0);
-
   const state = pageState({
     connections: connectionsQuery,
     buckets: bucketsQuery,
@@ -83,7 +81,6 @@ function HomePage() {
           connections={connections}
           activeConnection={activeConnection}
           onSelectConnection={setActive}
-          storageUsedBytes={totalBytes}
         />
       }
     >
@@ -124,10 +121,7 @@ function HomePage() {
       <AppStatusBar
         left={
           state.kind === "ok" ? (
-            <>
-              <span>{formatCount(buckets.length)} buckets</span>
-              <span>{formatBytes(totalBytes)} total</span>
-            </>
+            <span>{formatCount(buckets.length)} buckets</span>
           ) : null
         }
         right={<span>⌘K to search</span>}

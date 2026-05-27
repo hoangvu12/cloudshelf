@@ -28,7 +28,6 @@ import {
   useConnections,
   useDeleteConnection,
 } from "@/lib/api/connections";
-import { useBuckets } from "@/lib/api/buckets";
 import { cn } from "@/lib/utils";
 import { SHORTCUTS } from "@/lib/shortcuts";
 import { useActiveConnectionStore } from "@/stores/active-connection";
@@ -57,12 +56,6 @@ function SettingsPage() {
     if (activeId && activeId !== storedActiveId) setActive(activeId);
   }, [activeId, storedActiveId, setActive]);
 
-  const bucketsQuery = useBuckets(activeId);
-  const totalBytes = (bucketsQuery.data ?? []).reduce(
-    (sum, b) => sum + (b.sizeBytes ?? 0),
-    0
-  );
-
   const [section, setSection] = React.useState<Section>("appearance");
 
   return (
@@ -72,7 +65,6 @@ function SettingsPage() {
           connections={connections}
           activeConnection={activeConnection}
           onSelectConnection={setActive}
-          storageUsedBytes={totalBytes}
         />
       }
     >

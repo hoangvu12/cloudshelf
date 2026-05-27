@@ -5,7 +5,6 @@ import { Database, FolderPlus, Search, Settings } from "@/lib/icons";
 import { useNavigate } from "@tanstack/react-router";
 
 import { cn } from "@/lib/utils";
-import { formatBytes } from "@/lib/format";
 import type { Bucket } from "@server/types";
 
 /**
@@ -80,11 +79,6 @@ export function CommandPalette({
                         close();
                       }}
                       icon={<Database className="text-yellow-300 size-4" />}
-                      trailing={
-                        <span className="text-muted-foreground text-[10px]">
-                          {formatBytes(b.sizeBytes)}
-                        </span>
-                      }
                     >
                       {b.name}
                     </PaletteItem>
@@ -126,13 +120,11 @@ function PaletteItem({
   value,
   onSelect,
   icon,
-  trailing,
   children,
 }: {
   value: string;
   onSelect: () => void;
   icon: React.ReactNode;
-  trailing?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
@@ -146,7 +138,6 @@ function PaletteItem({
     >
       {icon}
       <span className="flex-1">{children}</span>
-      {trailing}
     </Command.Item>
   );
 }

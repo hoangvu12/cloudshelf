@@ -1,9 +1,6 @@
 /**
  * React Query hook for buckets under a given connection.
  * Backed by GET /api/connections/:id/buckets, which calls S3's ListBuckets.
- *
- * Note: `sizeBytes` and `objectCount` aren't populated — S3 doesn't return them
- * in the bucket list response. The UI shows "—" for missing values.
  */
 
 import {

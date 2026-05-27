@@ -64,12 +64,7 @@ export async function probeConnection(
   }
 }
 
-/**
- * List buckets for a saved connection. `sizeBytes` and `objectCount` are not
- * populated — S3's ListBuckets doesn't return them, and computing them per
- * bucket would require N parallel ListObjectsV2 calls. The UI renders "—" for
- * the missing values; revisit if/when we add a stats endpoint.
- */
+/** List buckets for a saved connection. */
 export async function listBucketsForConnection(
   conn: S3Connection
 ): Promise<Bucket[]> {

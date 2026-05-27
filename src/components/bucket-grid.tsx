@@ -7,11 +7,11 @@ import {
 } from "@/lib/icons";
 
 import { cn } from "@/lib/utils";
-import { formatBytes, formatCount, formatFileTime } from "@/lib/format";
+import { formatFileTime } from "@/lib/format";
 import { usePrefsStore } from "@/stores/prefs";
 import type { Bucket } from "@server/types";
 
-type SortKey = "name" | "size" | "objects" | "created";
+type SortKey = "name" | "created";
 
 /**
  * Grid view counterpart to BucketList. Pinned buckets render first, then a
@@ -20,8 +20,8 @@ type SortKey = "name" | "size" | "objects" | "created";
  * rarely has more buckets than fit on one screen.
  *
  * Card density tracks the same `density` pref as the list view: comfortable
- * gives larger tiles with size + items + modified, compact drops to just name
- * with a smaller icon.
+ * gives larger tiles that surface the creation date; compact drops to just the
+ * name with a smaller icon.
  */
 export function BucketGrid({
   buckets,
@@ -167,14 +167,6 @@ function BucketCard({
         )}
       </div>
 
-      {!compact && (
-        <div className="border-border text-muted-foreground mt-auto flex items-center justify-between border-t pt-2 font-mono text-[10px]">
-          <span>{formatBytes(bucket.sizeBytes)}</span>
-          <span className="text-muted-foreground">·</span>
-          <span>{formatCount(bucket.objectCount)} items</span>
-        </div>
-      )}
-
       <button
         type="button"
         aria-label={pinned ? "Unpin bucket" : "Pin bucket"}
@@ -212,10 +204,6 @@ function compare(key: SortKey) {
     switch (key) {
       case "name":
         return a.name.localeCompare(b.name);
-      case "size":
-        return (b.sizeBytes ?? 0) - (a.sizeBytes ?? 0);
-      case "objects":
-        return (b.objectCount ?? 0) - (a.objectCount ?? 0);
       case "created":
         return (
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
