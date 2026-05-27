@@ -15,16 +15,21 @@ import {
   createFolderForConnection,
   createMultipartUpload,
   deleteObjectsForConnection,
+  deleteObjectVersion,
+  getBucketVersioning,
   getObjectTags,
   headObject,
   listBucketsForConnection,
   listMultipartParts,
   listObjectsForConnection,
+  listObjectVersions,
   presignDownloadUrl,
   presignSingleUpload,
   presignUploadPart,
   probeConnection,
   putObjectTags,
+  restoreObjectVersion,
+  setBucketVersioning,
   updateObjectMetadata,
 } from "../lib/s3.ts";
 import type { S3Connection } from "../types.ts";
@@ -610,3 +615,134 @@ connectionsRoute.put("/:id/buckets/:bucket/objects/metadata", async (c) => {
     return c.json(upstreamError(err), 502);
   }
 });
+
+// ─── Versioning ─────────────────────────────────────────────────────────────
+// Bucket-level toggle + per-object version list / restore / delete. Backends
+// that don't implement these subresources (telegram-s3, some Garage builds)
+// 502 through the uniform upstreamError envelope — the client surfaces those
+// as a calm "unsupported on this backend" section rather than a toast spam.
+
+/** Read the bucket's versioning state ("Enabled" | "Suspended" | "Disabled"). */
+connectionsRoute.get("/:id/buckets/:bucket/versioning", async (c) => {
+  const conn = getConnection(c.req.param("id"));
+  if (!conn) return c.json({ error: "Not found" }, 404);
+  try {
+    const status = await getBucketVersioning(conn, c.req.param("bucket"));
+    return c.json({ status });
+  } catch (err) {
+    return c.json(upstreamError(err), 502);
+  }
+});
+
+/**
+ * Flip versioning on/off. S3 has no "Disabled" target — once enabled, the only
+ * off-switch is "Suspended". The schema rejects anything else so a future UI
+ * bug can't send the literal string "Disabled" and get a confusing 400 from S3.
+ */
+const versioningSchema = z.object({
+  status: z.enum(["Enabled", "Suspended"]),
+});
+
+connectionsRoute.put("/:id/buckets/:bucket/versioning", async (c) => {
+  const conn = getConnection(c.req.param("id"));
+  if (!conn) return c.json({ error: "Not found" }, 404);
+  const body = await c.req.json().catch(() => null);
+  const parsed = versioningSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json({ error: "Invalid payload", detail: parsed.error.message }, 400);
+  }
+  try {
+    await setBucketVersioning(
+      conn,
+      c.req.param("bucket"),
+      parsed.data.status
+    );
+    return c.json({ ok: true });
+  } catch (err) {
+    return c.json(upstreamError(err), 502);
+  }
+});
+
+/** List every version + delete marker for a single key, newest first. */
+connectionsRoute.get("/:id/buckets/:bucket/objects/versions", async (c) => {
+  const conn = getConnection(c.req.param("id"));
+  if (!conn) return c.json({ error: "Not found" }, 404);
+  const key = c.req.query("key");
+  if (!key) return c.json({ error: "Missing ?key=" }, 400);
+  try {
+    const versions = await listObjectVersions(
+      conn,
+      c.req.param("bucket"),
+      key
+    );
+    return c.json({ versions });
+  } catch (err) {
+    return c.json(upstreamError(err), 502);
+  }
+});
+
+/**
+ * Restore an older version as the new latest. Server-side CopyObject from
+ * `bucket/key?versionId=X` onto the same key without a versionId — writes a
+ * new latest version whose bytes mirror the historical one.
+ */
+const restoreSchema = z.object({
+  key: z.string().min(1),
+  versionId: z.string().min(1),
+});
+
+connectionsRoute.post(
+  "/:id/buckets/:bucket/objects/versions/restore",
+  async (c) => {
+    const conn = getConnection(c.req.param("id"));
+    if (!conn) return c.json({ error: "Not found" }, 404);
+    const body = await c.req.json().catch(() => null);
+    const parsed = restoreSchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json(
+        { error: "Invalid payload", detail: parsed.error.message },
+        400
+      );
+    }
+    try {
+      await restoreObjectVersion(
+        conn,
+        c.req.param("bucket"),
+        parsed.data.key,
+        parsed.data.versionId
+      );
+      return c.json({ ok: true });
+    } catch (err) {
+      return c.json(upstreamError(err), 502);
+    }
+  }
+);
+
+/**
+ * Hard-delete a specific version (or a delete marker — removing the marker
+ * un-deletes the key). `versionId` is required; without it the call would
+ * append yet another delete marker, which is never what this route is for.
+ */
+connectionsRoute.delete(
+  "/:id/buckets/:bucket/objects/versions",
+  async (c) => {
+    const conn = getConnection(c.req.param("id"));
+    if (!conn) return c.json({ error: "Not found" }, 404);
+    const key = c.req.query("key");
+    const versionId = c.req.query("versionId");
+    if (!key || !versionId) {
+      return c.json({ error: "Missing ?key= or ?versionId=" }, 400);
+    }
+    try {
+      await deleteObjectVersion(
+        conn,
+        c.req.param("bucket"),
+        key,
+        versionId
+      );
+      return c.json({ ok: true });
+    } catch (err) {
+      return c.json(upstreamError(err), 502);
+    }
+  }
+);

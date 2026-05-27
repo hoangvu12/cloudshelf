@@ -12,6 +12,8 @@ import {
   Link as LinkIcon,
   Loader2,
   Plus,
+  Restore,
+  Trash2,
   X,
 } from "@/lib/icons";
 
@@ -35,6 +37,12 @@ import {
   useUpdateObjectMetadata,
 } from "@/lib/api/object-info";
 import { useImageExif, type ImageExif } from "@/lib/api/exif";
+import {
+  useBucketVersioning,
+  useDeleteObjectVersion,
+  useObjectVersions,
+  useRestoreObjectVersion,
+} from "@/lib/api/versioning";
 import { usePreviewStore } from "@/stores/preview";
 import { useShareStore } from "@/stores/share";
 import { useCopied } from "@/lib/use-copied";
@@ -43,7 +51,7 @@ import {
   DrawerContent,
   DrawerTitle,
 } from "@/components/ui/drawer";
-import type { ObjectTag, S3ObjectEntry } from "@server/types";
+import type { ObjectTag, ObjectVersion, S3ObjectEntry } from "@server/types";
 
 /** Cap how much of a text/code file we'll pull down for inline preview. */
 const TEXT_PREVIEW_BYTES = 512 * 1024;
@@ -333,6 +341,12 @@ function PreviewBody({
       />
 
       <TagsSection
+        connectionId={connectionId}
+        bucket={bucket}
+        objectKey={objectKey}
+      />
+
+      <VersioningSection
         connectionId={connectionId}
         bucket={bucket}
         objectKey={objectKey}
@@ -682,6 +696,313 @@ function TagsSection({
         </div>
       </SectionBody>
     </>
+  );
+}
+
+// ─── Versioning section ───────────────────────────────────────────────────
+// Per-object history of versions + delete markers. Two layers of gating:
+//   1. The bucket-level `GetBucketVersioning` query — many S3-compatibles
+//      (telegram-s3, some Garage builds) 502 on that call. We catch and render
+//      the "unsupported on this backend" treatment per §0.5 convention #3.
+//   2. The per-object `ListObjectVersions` query — only fired when versioning
+//      is Enabled or Suspended. For "Disabled" we surface the muted
+//      explanatory state without hitting the second endpoint.
+//
+// Each row gets a Restore / Download / Delete trio. Delete markers are
+// surfaced with a "Deleted" badge and disable Restore/Download (downloading a
+// marker is invalid; restoring it would just write a fresh copy of nothing).
+
+function VersioningSection({
+  connectionId,
+  bucket,
+  objectKey,
+}: {
+  connectionId: string;
+  bucket: string;
+  objectKey: string;
+}) {
+  const bucketState = useBucketVersioning(connectionId, bucket);
+
+  if (bucketState.isPending) {
+    return (
+      <>
+        <SectionHeader title="Versioning" />
+        <SectionBody>
+          <ShellLoading />
+        </SectionBody>
+      </>
+    );
+  }
+
+  // Mirrors the TagsSection "graceful unsupported" pattern. A 502 from our
+  // wrapper is what telegram-s3 and friends return when the subresource isn't
+  // implemented — render calmly, keep the upstream message visible.
+  if (bucketState.error) {
+    return (
+      <>
+        <SectionHeader title="Versioning" trailing="unsupported" />
+        <SectionBody>
+          <div className="text-muted-foreground space-y-1">
+            <div>Versioning isn't supported on this backend.</div>
+            <div className="text-foreground/50 break-all text-[10px]">
+              {bucketState.error.message}
+            </div>
+          </div>
+        </SectionBody>
+      </>
+    );
+  }
+
+  const status = bucketState.data?.status ?? "Disabled";
+  if (status === "Disabled") {
+    return (
+      <>
+        <SectionHeader title="Versioning" trailing="off" />
+        <SectionBody>
+          <div className="text-muted-foreground">
+            Versioning is disabled for this bucket. Enable it in bucket
+            settings to start keeping per-key history.
+          </div>
+        </SectionBody>
+      </>
+    );
+  }
+
+  return (
+    <VersionsList
+      connectionId={connectionId}
+      bucket={bucket}
+      objectKey={objectKey}
+      status={status}
+    />
+  );
+}
+
+function VersionsList({
+  connectionId,
+  bucket,
+  objectKey,
+  status,
+}: {
+  connectionId: string;
+  bucket: string;
+  objectKey: string;
+  status: "Enabled" | "Suspended";
+}) {
+  const versions = useObjectVersions(connectionId, bucket, objectKey);
+  const restore = useRestoreObjectVersion(connectionId, bucket, {
+    onSuccess: () => toast.success("Version restored as latest"),
+    onError: (e) => toast.error(e.message),
+  });
+  const remove = useDeleteObjectVersion(connectionId, bucket, {
+    onSuccess: () => toast.success("Version deleted"),
+    onError: (e) => toast.error(e.message),
+  });
+
+  if (versions.isPending) {
+    return (
+      <>
+        <SectionHeader
+          title="Versioning"
+          trailing={status === "Suspended" ? "suspended" : undefined}
+        />
+        <SectionBody>
+          <ShellLoading />
+        </SectionBody>
+      </>
+    );
+  }
+
+  if (versions.error) {
+    return (
+      <>
+        <SectionHeader title="Versioning" trailing="unsupported" />
+        <SectionBody>
+          <div className="text-muted-foreground space-y-1">
+            <div>Couldn't load versions for this object.</div>
+            <div className="text-foreground/50 break-all text-[10px]">
+              {versions.error.message}
+            </div>
+          </div>
+        </SectionBody>
+      </>
+    );
+  }
+
+  const list = versions.data?.versions ?? [];
+  const trailing =
+    status === "Suspended" ? `${list.length} · suspended` : `${list.length}`;
+
+  return (
+    <>
+      <SectionHeader title="Versioning" trailing={trailing} />
+      <SectionBody>
+        {list.length === 0 ? (
+          <div className="text-muted-foreground">No versions recorded yet.</div>
+        ) : (
+          <ul className="space-y-2">
+            {list.map((v) => (
+              <VersionRow
+                key={v.versionId}
+                connectionId={connectionId}
+                bucket={bucket}
+                objectKey={objectKey}
+                version={v}
+                pending={restore.isPending || remove.isPending}
+                onRestore={() =>
+                  restore.mutate({ key: objectKey, versionId: v.versionId })
+                }
+                onDelete={() =>
+                  remove.mutate({ key: objectKey, versionId: v.versionId })
+                }
+              />
+            ))}
+          </ul>
+        )}
+      </SectionBody>
+    </>
+  );
+}
+
+function VersionRow({
+  connectionId,
+  bucket,
+  objectKey,
+  version,
+  pending,
+  onRestore,
+  onDelete,
+}: {
+  connectionId: string;
+  bucket: string;
+  objectKey: string;
+  version: ObjectVersion;
+  pending: boolean;
+  onRestore: () => void;
+  onDelete: () => void;
+}) {
+  const handleDownload = async () => {
+    // We don't currently route ?versionId= through the download-url endpoint
+    // — restoring is the supported path for "I want this old content back".
+    // A direct historical download could be added later by extending the
+    // presign route; for now nudge the user toward Restore.
+    if (version.isDeleteMarker) return;
+    try {
+      // Use the existing latest-only download URL when the row is the latest.
+      // Older versions: fall back to a toast rather than silently downloading
+      // the latest by mistake.
+      if (version.isLatest) {
+        const { url } = await fetchDownloadUrl(connectionId, bucket, objectKey);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = basename(objectKey);
+        a.rel = "noopener";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        return;
+      }
+      toast.info("Restore the version first to download its contents");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Download failed");
+    }
+  };
+
+  const idShort = version.versionId === "null"
+    ? "null"
+    : version.versionId.length > 10
+    ? `${version.versionId.slice(0, 8)}…`
+    : version.versionId;
+
+  return (
+    <li className="border-border bg-input-bg/30 space-y-2 rounded border px-3 py-2">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1 space-y-1">
+          <div className="flex items-center gap-1.5">
+            {version.isLatest && (
+              <span className="bg-accent-green/15 text-accent-green rounded px-1.5 py-0.5 text-[9px] font-semibold tracking-wider uppercase">
+                Latest
+              </span>
+            )}
+            {version.isDeleteMarker && (
+              <span className="bg-destructive/15 text-destructive rounded px-1.5 py-0.5 text-[9px] font-semibold tracking-wider uppercase">
+                Deleted
+              </span>
+            )}
+            <span
+              className="text-foreground/80 truncate font-mono text-[10px]"
+              title={version.versionId}
+            >
+              {idShort}
+            </span>
+          </div>
+          <div className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px]">
+            <span>{formatFileTime(version.lastModified)}</span>
+            {!version.isDeleteMarker && (
+              <span>{formatBytes(version.size)}</span>
+            )}
+            {version.storageClass && <span>{version.storageClass}</span>}
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label="Restore as latest"
+            title={
+              version.isDeleteMarker
+                ? "Restoring a delete marker writes empty content; delete the marker instead"
+                : version.isLatest
+                ? "Already the latest version"
+                : "Restore this version as the new latest"
+            }
+            disabled={pending || version.isDeleteMarker || version.isLatest}
+            onClick={onRestore}
+          >
+            <Restore className="size-3.5" />
+          </Button>
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label="Download this version"
+            title={
+              version.isDeleteMarker
+                ? "Delete markers have no content to download"
+                : version.isLatest
+                ? "Download the latest version"
+                : "Restore this version first, then download"
+            }
+            disabled={pending || version.isDeleteMarker || !version.isLatest}
+            onClick={handleDownload}
+          >
+            <Download className="size-3.5" />
+          </Button>
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label="Delete this version permanently"
+            title="Permanently delete this version (cannot be undone)"
+            disabled={pending}
+            onClick={() => {
+              const label = version.isDeleteMarker
+                ? "delete marker"
+                : version.isLatest
+                ? "latest version"
+                : "version";
+              if (
+                window.confirm(
+                  `Permanently delete this ${label}? This cannot be undone.`
+                )
+              ) {
+                onDelete();
+              }
+            }}
+          >
+            <Trash2 className="text-destructive size-3.5" />
+          </Button>
+        </div>
+      </div>
+    </li>
   );
 }
 

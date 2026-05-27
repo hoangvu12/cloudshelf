@@ -69,6 +69,7 @@ export { default as Edit2 } from "@material-symbols/svg-400/outlined/edit-fill.s
 export { default as PenLine } from "@material-symbols/svg-400/outlined/edit_note-fill.svg?react";
 export { default as Trash2 } from "@material-symbols/svg-400/outlined/delete-fill.svg?react";
 export { default as RotateCw } from "@material-symbols/svg-400/outlined/refresh-fill.svg?react";
+export { default as Restore } from "@material-symbols/svg-400/outlined/history-fill.svg?react";
 export { default as Maximize2 } from "@material-symbols/svg-400/outlined/open_in_full-fill.svg?react";
 export { default as Pause } from "@material-symbols/svg-400/outlined/pause-fill.svg?react";
 export { default as Play } from "@material-symbols/svg-400/outlined/play_arrow-fill.svg?react";

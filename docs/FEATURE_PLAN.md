@@ -617,17 +617,131 @@ toggle on. EXIF has no such toggle.
 
 None.
 
-### Eligibility snapshot (as of Phase 14 ship)
+### Phase 5 — shipped ✅ (commit `feat(versioning): bucket toggle + per-object history`)
+
+Shipped close to spec. The "where does the toggle live?" UX question was
+ambiguous in the spec (it just said "Bucket settings dialog"), so this phase
+also introduced the bucket-settings entry point — see deviations below.
+
+**Server / API:**
+
+- `server/lib/s3.ts` — `getBucketVersioning`, `setBucketVersioning`,
+  `listObjectVersions`, `deleteObjectVersion`, `restoreObjectVersion`. The
+  restore helper is a CopyObject from `bucket/key?versionId=X` onto the same
+  key with no versionId — `versionId=` is concatenated onto `CopySource`
+  itself (SDK mirrors the wire format strictly; there's no top-level field).
+  `listObjectVersions` loops on `IsTruncated`, filters to exact-key matches
+  (prefix-listing can pull in siblings like `foo` vs `foobar`), merges real
+  versions and delete markers into one list, and sorts newest-first by
+  `lastModified` because some S3-compatibles don't honor the wire "latest
+  first" contract.
+- `server/types.ts` — `VersioningStatus = "Enabled" | "Suspended" | "Disabled"`
+  (empty `Status` from S3 normalizes to "Disabled" so the client doesn't
+  have to know about the wire quirk) and `ObjectVersion`.
+- `server/routes/connections.ts` — five new routes:
+  - `GET    /:id/buckets/:bucket/versioning`
+  - `PUT    /:id/buckets/:bucket/versioning` (Zod-restricted to
+    `"Enabled" | "Suspended"` — S3 has no "Disabled" target)
+  - `GET    /:id/buckets/:bucket/objects/versions?key=`
+  - `POST   /:id/buckets/:bucket/objects/versions/restore`
+  - `DELETE /:id/buckets/:bucket/objects/versions?key=&versionId=`
+  All wrap the SDK in the existing `upstreamError()` 502 envelope so the
+  client can branch on "this backend doesn't implement the subresource".
+
+**Client:**
+
+- `src/lib/api/versioning.ts` — per-resource convention #6. `versioningKeys`
+  exports `bucket(connectionId, bucket)` and `object(connectionId, bucket,
+  key)` factories. Bucket-toggle query has `staleTime: 5min` because
+  versioning state rarely flips and the preview panel's section reads it on
+  every prev/next. Mutations (restore, delete) invalidate both the specific
+  versioning-object key AND `objectKeys.bucket` — restoring writes a new
+  latest version, deleting a marker un-deletes the key, both surface in the
+  bucket listing.
+- `src/components/file-preview-panel.tsx` — new `<VersioningSection>` slotted
+  *after* `<TagsSection>`. Two layers of gating: (1) bucket-level
+  `useBucketVersioning` 502 → `trailing="unsupported"` + muted message
+  (convention #3, mirrors how `TagsSection` handles telegram-s3); (2) when
+  status is `Disabled` we surface "Versioning is disabled for this bucket.
+  Enable it in bucket settings." without firing the per-object list query.
+  When status is `Enabled` or `Suspended` we mount `<VersionsList>` which
+  pulls `useObjectVersions` and renders one `<VersionRow>` per entry.
+- `VersionRow` — pill badge for `Latest` (green) or `Deleted` (destructive);
+  truncated version-id (`abc12345…`), formatted lastModified, size, storage
+  class. Three icon buttons:
+  - **Restore** (history icon) — disabled when the row IS already the latest
+    or is a delete marker.
+  - **Download** — only enabled on the latest version. Older-version
+    download isn't wired (the existing `download-url` route doesn't accept
+    `?versionId=`); for now we toast "Restore the version first to download
+    its contents." Adding `?versionId=` to that route is a small follow-up
+    if a user actually needs it.
+  - **Delete** — `window.confirm` gate ("Permanently delete this version?
+    This cannot be undone."). Works on real versions and delete markers
+    (removing a marker un-deletes the key).
+- `src/components/bucket-dialogs.tsx` — new `BucketSettingsDialog` next to the
+  existing `CreateBucketDialog`. Today it just hosts `<VersioningToggle>`
+  (Switch + muted explanatory copy that explains the Enabled/Suspended
+  asymmetry). Built so Phases 7, 8, 10 can slot more sections in next to it
+  without restructuring.
+- `src/components/object-browser.tsx` — added a small Settings cog button on
+  the right side of the breadcrumb row (next to where the breadcrumb sits)
+  that opens the BucketSettingsDialog. Reused the same `IconBtn`-style
+  chrome the breadcrumb arrows use so the visual weight matches. The
+  breadcrumb container had to switch from no-justification to
+  `justify-between` to host both children.
+
+**Icon added:** `Restore` (Material Symbols `history-fill`) — exported from
+`src/lib/icons.ts` next to `RotateCw`.
+
+**Deviations from spec:**
+
+- Spec said "Lazy-mount [the section] only when `useBucketVersioning(...)`
+  returns Enabled or Suspended" — I interpret "lazy-mount" loosely. The
+  section ALWAYS renders so the user gets feedback (loading skeleton,
+  unsupported chip, or "Disabled — enable in bucket settings"), and the
+  per-object versions query only fires when status is `Enabled`/`Suspended`.
+  Silently hiding the section on a versioning-disabled bucket would leave
+  the user wondering whether the feature exists at all. Convention #3 from
+  §0.5 favors keeping the section visible with an explicit chip.
+- Spec didn't say where the BucketSettingsDialog's entry point lives —
+  there wasn't one before. Adding a discoverable cog to the breadcrumb row
+  was the lowest-cost option; the alternative (wiring `MoreHorizontal` on
+  bucket-list rows) requires building a dropdown menu first and only
+  reaches the dialog from the home page, not from inside the bucket where
+  the Versioning section is rendering.
+- Older-version download is intentionally a no-op-with-toast rather than a
+  real direct-download. Restore-then-download is one click longer but
+  matches the spec's stated path ("restore as latest").
+
+### Conventions earned in Phase 5 — reuse in later phases
+
+None new. Phase 5 is a clean application of conventions #1 (SectionHeader/
+SectionBody inside `file-preview-panel.tsx`), #3 (graceful unsupported
+treatment), #5 (mutation `onSuccess` with `...args` spread), #6
+(`versioningKeys` + per-resource API file with cross-resource invalidation),
+and #7 (no zustand store — versioning lives in the preview panel, and
+BucketSettingsDialog state stays local to the object browser). The new
+BucketSettingsDialog is the natural home for Phase 7 (lifecycle), Phase 8
+(CORS/policy), and Phase 10 (object lock) toggles when those ship — slot
+another component next to `<VersioningToggle>`.
+
+### Phases unblocked by Phase 5
+
+10 (Object Lock / retention / legal hold) — was the only phase explicitly
+blocked on Phase 5 per the §1 dependency column.
+
+### Eligibility snapshot (as of Phase 5 ship)
 
 Pickable now, in rough recommend-first order:
 
-- **5** Versioning view + restore (M, unblocked by Phase 1)
 - **9** Storage class on upload (S, no deps)
 - **16** Paste / URL upload (S, no deps — reuse Phase-3 `UploadInputFile`)
 - **17** Activity log (S, no deps)
 - **20** Range-GET video player polish (S, no deps)
+- **10** Object Lock / retention / legal hold (M, unblocked by Phase 5)
 - **2-blocked**: 13 (shelves), 18 (protected share links) — eligible.
-- Heavier M/L: 6, 7, 8, 10, 11, 12, 19.
+- Heavier M/L: 6, 7, 8, 11, 12, 19.
 
 ---
 
@@ -639,7 +753,7 @@ Pickable now, in rough recommend-first order:
 | 2 | Share dialog upgrade (TTL + QR)      | S      | —          | ✅ shipped (see §0.5) |
 | 3 | Folder upload                        | S      | —          | ✅ shipped (see §0.5) |
 | 4 | Bulk download as ZIP                 | S      | —          | ✅ shipped (see §0.5) |
-| 5 | Versioning view + restore            | M      | 1          |
+| 5 | Versioning view + restore            | M      | 1          | ✅ shipped (see §0.5) |
 | 6 | Cross-bucket copy/move + folder rename | M    | —          |
 | 7 | Lifecycle rules editor               | M      | —          |
 | 8 | CORS + bucket policy editor          | M      | —          |

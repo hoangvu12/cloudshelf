@@ -2,10 +2,11 @@ import * as React from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { FolderX, ServerCrash, UploadCloud } from "@/lib/icons";
+import { FolderX, ServerCrash, Settings, UploadCloud } from "@/lib/icons";
 
 import { AppStatusBar } from "@/components/app-shell";
 import { BreadcrumbPath } from "@/components/breadcrumb-path";
+import { BucketSettingsDialog } from "@/components/bucket-dialogs";
 import { EmptyState } from "@/components/empty-state";
 import {
   ConfirmDeleteDialog,
@@ -121,6 +122,7 @@ export function ObjectBrowser({
   const [moveOpen, setMoveOpen] = React.useState(false);
   const [copyToOpen, setCopyToOpen] = React.useState(false);
   const [deleteOpen, setDeleteOpen] = React.useState(false);
+  const [bucketSettingsOpen, setBucketSettingsOpen] = React.useState(false);
   /** Captured at the moment "Rename" is invoked so the dialog has a stable target. */
   const [renameTarget, setRenameTarget] = React.useState<S3Entry | null>(null);
 
@@ -894,13 +896,22 @@ export function ObjectBrowser({
       openRef={openPickerRef}
       openFolderRef={openFolderPickerRef}
     >
-      <div className="border-border bg-background flex h-12 shrink-0 items-center border-b px-4">
+      <div className="border-border bg-background flex h-12 shrink-0 items-center justify-between gap-3 border-b px-4">
         <BreadcrumbPath
           bucket={bucket}
           prefix={prefix}
           onNavigatePrefix={navigateToPrefix}
           onNavigateHome={() => navigate({ to: "/" })}
         />
+        <button
+          type="button"
+          onClick={() => setBucketSettingsOpen(true)}
+          className="hover:bg-muted text-muted-foreground hover:text-foreground shrink-0 rounded p-1.5 focus:outline-none"
+          aria-label="Bucket settings"
+          title="Bucket settings (versioning, …)"
+        >
+          <Settings className="size-4" />
+        </button>
       </div>
 
       <ObjectToolbar
@@ -1011,6 +1022,12 @@ export function ObjectBrowser({
         count={selectedIds.size}
         pending={deleteObjects.isPending}
         onConfirm={handleConfirmDelete}
+      />
+      <BucketSettingsDialog
+        open={bucketSettingsOpen}
+        onOpenChange={setBucketSettingsOpen}
+        connectionId={connectionId}
+        bucket={bucket}
       />
     </UploadDropzone>
   );

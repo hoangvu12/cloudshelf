@@ -4,13 +4,17 @@ import {
   CopyObjectCommand,
   CreateBucketCommand,
   CreateMultipartUploadCommand,
+  DeleteObjectCommand,
   DeleteObjectsCommand,
+  GetBucketVersioningCommand,
   GetObjectCommand,
   GetObjectTaggingCommand,
   HeadObjectCommand,
   ListBucketsCommand,
+  ListObjectVersionsCommand,
   ListObjectsV2Command,
   ListPartsCommand,
+  PutBucketVersioningCommand,
   PutObjectCommand,
   PutObjectTaggingCommand,
   S3Client,
@@ -24,9 +28,11 @@ import type {
   ListObjectsPage,
   ObjectHead,
   ObjectTag,
+  ObjectVersion,
   PresignedUrl,
   S3Connection,
   S3Entry,
+  VersioningStatus,
 } from "../types.ts";
 
 /**
@@ -602,6 +608,188 @@ export async function updateObjectMetadata(
         MetadataDirective: "REPLACE",
         Metadata: newMetadata,
         ContentType: newContentType,
+      })
+    );
+  } finally {
+    client.destroy();
+  }
+}
+
+// ─── Versioning ────────────────────────────────────────────────────────────
+//
+// Versioning is a bucket-level subresource — once enabled it's per-key history
+// for everything inside. S3 reports the bucket state via `GetBucketVersioning`
+// (empty Status = never enabled). Per-object history is enumerated via
+// `ListObjectVersions`, which interleaves real versions with delete markers in
+// the same response; the SDK splits them into two arrays for us and we merge
+// back into one chronological list keyed by versionId.
+//
+// "Restore" doesn't have a dedicated S3 verb. The canonical recipe is
+// CopyObject from `bucket/key?versionId=X` onto the same key without a
+// versionId, which writes a brand new latest version whose bytes mirror the
+// historical one. That's what restoreObjectVersion does below.
+
+/**
+ * Fetch the bucket's versioning state and normalize it to the three-state
+ * union. S3 returns an empty `Status` field for buckets where versioning has
+ * never been turned on — we surface that as "Disabled" rather than undefined
+ * so the client has a single shape to switch on.
+ */
+export async function getBucketVersioning(
+  conn: S3Connection,
+  bucket: string
+): Promise<VersioningStatus> {
+  const client = createS3Client(conn);
+  try {
+    const out = await client.send(
+      new GetBucketVersioningCommand({ Bucket: bucket })
+    );
+    if (out.Status === "Enabled") return "Enabled";
+    if (out.Status === "Suspended") return "Suspended";
+    return "Disabled";
+  } finally {
+    client.destroy();
+  }
+}
+
+/**
+ * Flip versioning on or off. S3's API has no "Disabled" target — once enabled
+ * the only off-switch is "Suspended" (existing versions stay, new writes don't
+ * create new versions). Surface that wire constraint in the type so the UI
+ * never accidentally sends "Disabled".
+ */
+export async function setBucketVersioning(
+  conn: S3Connection,
+  bucket: string,
+  status: "Enabled" | "Suspended"
+): Promise<void> {
+  const client = createS3Client(conn);
+  try {
+    await client.send(
+      new PutBucketVersioningCommand({
+        Bucket: bucket,
+        VersioningConfiguration: { Status: status },
+      })
+    );
+  } finally {
+    client.destroy();
+  }
+}
+
+/**
+ * List every version + delete marker for a single key. The S3 API is keyed by
+ * `prefix`, not exact match, so we filter to entries whose `Key` matches the
+ * requested key exactly. Paginated via `KeyMarker` + `VersionIdMarker`; we
+ * loop until `IsTruncated` clears so callers get one flat list.
+ */
+export async function listObjectVersions(
+  conn: S3Connection,
+  bucket: string,
+  key: string
+): Promise<ObjectVersion[]> {
+  const client = createS3Client(conn);
+  try {
+    const out: ObjectVersion[] = [];
+    let keyMarker: string | undefined;
+    let versionIdMarker: string | undefined;
+    for (;;) {
+      const page = await client.send(
+        new ListObjectVersionsCommand({
+          Bucket: bucket,
+          Prefix: key,
+          KeyMarker: keyMarker,
+          VersionIdMarker: versionIdMarker,
+        })
+      );
+      for (const v of page.Versions ?? []) {
+        // Prefix-listing can pull in sibling keys (e.g. "foo" matches "foobar").
+        // Filter to exact-key matches so the caller never has to.
+        if (v.Key !== key || !v.VersionId) continue;
+        out.push({
+          versionId: v.VersionId,
+          isLatest: v.IsLatest ?? false,
+          isDeleteMarker: false,
+          size: v.Size ?? 0,
+          etag: v.ETag ?? undefined,
+          lastModified:
+            v.LastModified?.toISOString() ?? new Date(0).toISOString(),
+          storageClass: v.StorageClass ?? undefined,
+        });
+      }
+      for (const dm of page.DeleteMarkers ?? []) {
+        if (dm.Key !== key || !dm.VersionId) continue;
+        out.push({
+          versionId: dm.VersionId,
+          isLatest: dm.IsLatest ?? false,
+          isDeleteMarker: true,
+          size: 0,
+          lastModified:
+            dm.LastModified?.toISOString() ?? new Date(0).toISOString(),
+        });
+      }
+      if (!page.IsTruncated) break;
+      keyMarker = page.NextKeyMarker;
+      versionIdMarker = page.NextVersionIdMarker;
+      // Defensive: if the SDK reports truncated but doesn't hand back markers,
+      // bail rather than spin forever.
+      if (!keyMarker && !versionIdMarker) break;
+    }
+    // Newest first — `LastModified` is the only stable ordering we have across
+    // backends (some S3-compatibles don't honor the "latest first" contract).
+    out.sort((a, b) => b.lastModified.localeCompare(a.lastModified));
+    return out;
+  } finally {
+    client.destroy();
+  }
+}
+
+/**
+ * Hard-delete a specific version. With versioning on, a regular DELETE just
+ * appends a delete marker — passing `VersionId` is what actually frees the
+ * bytes. Used both for "permanently delete this version" and for cleaning up
+ * a delete marker (removing the marker un-deletes the key).
+ */
+export async function deleteObjectVersion(
+  conn: S3Connection,
+  bucket: string,
+  key: string,
+  versionId: string
+): Promise<void> {
+  const client = createS3Client(conn);
+  try {
+    await client.send(
+      new DeleteObjectCommand({
+        Bucket: bucket,
+        Key: key,
+        VersionId: versionId,
+      })
+    );
+  } finally {
+    client.destroy();
+  }
+}
+
+/**
+ * Restore-as-latest: CopyObject from `bucket/key?versionId=X` onto the same
+ * key without a versionId. Same encoding quirk as the other CopyObject
+ * helpers — CopySource is percent-encoded except for "/" separators, and
+ * `versionId=` rides on the CopySource string itself, not as a top-level
+ * field (the SDK strictly mirrors the S3 wire format here).
+ */
+export async function restoreObjectVersion(
+  conn: S3Connection,
+  bucket: string,
+  key: string,
+  versionId: string
+): Promise<void> {
+  const client = createS3Client(conn);
+  try {
+    const encoded = encodeURIComponent(key).replace(/%2F/g, "/");
+    await client.send(
+      new CopyObjectCommand({
+        Bucket: bucket,
+        Key: key,
+        CopySource: `/${bucket}/${encoded}?versionId=${encodeURIComponent(versionId)}`,
       })
     );
   } finally {

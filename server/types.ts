@@ -123,3 +123,28 @@ export interface ObjectTag {
   key: string;
   value: string;
 }
+
+/**
+ * Bucket versioning state from `GetBucketVersioning`. "Disabled" is the SDK's
+ * way of representing a bucket where versioning has never been enabled — S3
+ * reports an empty `Status` field in that case, which we normalize to a
+ * three-state union so the client doesn't have to know about the wire quirk.
+ */
+export type VersioningStatus = "Enabled" | "Suspended" | "Disabled";
+
+/**
+ * One entry in `ListObjectVersions` for a given key. Delete markers ride on
+ * the same listing as real versions — the UI surfaces them with a "Deleted"
+ * badge and disables download/restore for them. `versionId` is the wire-level
+ * id S3 uses; on buckets where versioning was never enabled it may be the
+ * literal string "null", which is a valid value the SDK round-trips.
+ */
+export interface ObjectVersion {
+  versionId: string;
+  isLatest: boolean;
+  isDeleteMarker: boolean;
+  size: number;
+  etag?: string;
+  lastModified: string;
+  storageClass?: string;
+}
