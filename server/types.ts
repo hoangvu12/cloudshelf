@@ -101,3 +101,25 @@ export interface DeleteObjectsResult {
   deleted: number;
   errors: { key: string; message: string }[];
 }
+
+/**
+ * The fields HEAD-Object surfaces about a single key — fed into the info panel.
+ * `userMetadata` keys are lowercased and stripped of the `x-amz-meta-` prefix
+ * so the client never has to know the wire-level naming convention.
+ */
+export interface ObjectHead {
+  key: string;
+  size: number;
+  etag?: string;
+  lastModified: string;
+  contentType?: string;
+  storageClass?: string;
+  versionId?: string;
+  userMetadata: Record<string, string>;
+}
+
+/** One S3 object tag. Up to 10 per object; keys ≤ 128 chars, values ≤ 256. */
+export interface ObjectTag {
+  key: string;
+  value: string;
+}

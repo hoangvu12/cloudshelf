@@ -6,10 +6,13 @@ import {
   CreateMultipartUploadCommand,
   DeleteObjectsCommand,
   GetObjectCommand,
+  GetObjectTaggingCommand,
+  HeadObjectCommand,
   ListBucketsCommand,
   ListObjectsV2Command,
   ListPartsCommand,
   PutObjectCommand,
+  PutObjectTaggingCommand,
   S3Client,
   UploadPartCommand,
 } from "@aws-sdk/client-s3";
@@ -19,6 +22,8 @@ import type {
   CreateConnectionInput,
   DeleteObjectsResult,
   ListObjectsPage,
+  ObjectHead,
+  ObjectTag,
   PresignedUrl,
   S3Connection,
   S3Entry,
@@ -472,6 +477,131 @@ export async function abortMultipartUpload(
         Bucket: bucket,
         Key: key,
         UploadId: uploadId,
+      })
+    );
+  } finally {
+    client.destroy();
+  }
+}
+
+// ─── Object info / metadata / tags ─────────────────────────────────────────
+//
+// HEAD surfaces what's in the response headers (size, ETag, content-type,
+// storage class, x-amz-meta-* user metadata). Tags ride on a separate sub-
+// resource (?tagging) — they're not part of the HEAD response. Updating
+// either userMetadata or contentType requires a CopyObject onto itself with
+// `MetadataDirective: REPLACE` because S3 has no PUT-metadata verb.
+
+/**
+ * HEAD the object and reshape the SDK's response into a UI-friendly shape.
+ * `userMetadata` keys come back lowercased and without the `x-amz-meta-`
+ * prefix so the client never has to know S3's wire convention.
+ */
+export async function headObject(
+  conn: S3Connection,
+  bucket: string,
+  key: string,
+  versionId?: string
+): Promise<ObjectHead> {
+  const client = createS3Client(conn);
+  try {
+    const out = await client.send(
+      new HeadObjectCommand({ Bucket: bucket, Key: key, VersionId: versionId })
+    );
+    // SDK already lowercases user-metadata keys; mirror that explicitly so the
+    // contract holds even if a future SDK version changes.
+    const userMetadata: Record<string, string> = {};
+    for (const [k, v] of Object.entries(out.Metadata ?? {})) {
+      if (typeof v === "string") userMetadata[k.toLowerCase()] = v;
+    }
+    return {
+      key,
+      size: out.ContentLength ?? 0,
+      etag: out.ETag ?? undefined,
+      lastModified:
+        out.LastModified?.toISOString() ?? new Date(0).toISOString(),
+      contentType: out.ContentType ?? undefined,
+      storageClass: out.StorageClass ?? undefined,
+      versionId: out.VersionId ?? undefined,
+      userMetadata,
+    };
+  } finally {
+    client.destroy();
+  }
+}
+
+export async function getObjectTags(
+  conn: S3Connection,
+  bucket: string,
+  key: string,
+  versionId?: string
+): Promise<ObjectTag[]> {
+  const client = createS3Client(conn);
+  try {
+    const out = await client.send(
+      new GetObjectTaggingCommand({
+        Bucket: bucket,
+        Key: key,
+        VersionId: versionId,
+      })
+    );
+    return (out.TagSet ?? [])
+      .filter((t) => t.Key != null)
+      .map((t) => ({ key: t.Key!, value: t.Value ?? "" }));
+  } finally {
+    client.destroy();
+  }
+}
+
+export async function putObjectTags(
+  conn: S3Connection,
+  bucket: string,
+  key: string,
+  tags: ObjectTag[],
+  versionId?: string
+): Promise<void> {
+  const client = createS3Client(conn);
+  try {
+    await client.send(
+      new PutObjectTaggingCommand({
+        Bucket: bucket,
+        Key: key,
+        VersionId: versionId,
+        Tagging: { TagSet: tags.map((t) => ({ Key: t.key, Value: t.value })) },
+      })
+    );
+  } finally {
+    client.destroy();
+  }
+}
+
+/**
+ * Replace userMetadata (and optionally contentType) on an existing key. S3 has
+ * no in-place metadata update — the conventional trick is CopyObject onto the
+ * same key with `MetadataDirective: REPLACE`, which rewrites the headers and
+ * keeps the body. Storage class etc. are preserved by default.
+ *
+ * Same encoding quirk as `copyObjectForConnection`: CopySource is
+ * percent-encoded except for "/" separators.
+ */
+export async function updateObjectMetadata(
+  conn: S3Connection,
+  bucket: string,
+  key: string,
+  newMetadata: Record<string, string>,
+  newContentType?: string
+): Promise<void> {
+  const client = createS3Client(conn);
+  try {
+    const encoded = encodeURIComponent(key).replace(/%2F/g, "/");
+    await client.send(
+      new CopyObjectCommand({
+        Bucket: bucket,
+        Key: key,
+        CopySource: `/${bucket}/${encoded}`,
+        MetadataDirective: "REPLACE",
+        Metadata: newMetadata,
+        ContentType: newContentType,
       })
     );
   } finally {

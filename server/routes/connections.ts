@@ -15,6 +15,8 @@ import {
   createFolderForConnection,
   createMultipartUpload,
   deleteObjectsForConnection,
+  getObjectTags,
+  headObject,
   listBucketsForConnection,
   listMultipartParts,
   listObjectsForConnection,
@@ -22,6 +24,8 @@ import {
   presignSingleUpload,
   presignUploadPart,
   probeConnection,
+  putObjectTags,
+  updateObjectMetadata,
 } from "../lib/s3.ts";
 import type { S3Connection } from "../types.ts";
 
@@ -456,3 +460,128 @@ connectionsRoute.post(
     }
   }
 );
+
+// ─── Object info / tags / metadata ─────────────────────────────────────────
+// S3 hands user-metadata via `x-amz-meta-*` headers and tags via a separate
+// `?tagging` sub-resource. The routes below let the info-panel UI read both
+// without each component having to know that wire detail.
+
+/**
+ * Tag values are validated against S3's hard limits (10 tags, 128-char keys,
+ * 256-char values). Empty values are allowed — S3 stores them as the empty
+ * string and they round-trip cleanly.
+ */
+const tagSchema = z.object({
+  tags: z
+    .array(
+      z.object({
+        key: z.string().min(1).max(128),
+        value: z.string().max(256),
+      })
+    )
+    .max(10),
+});
+
+/**
+ * `userMetadata` keys are lowercased and re-validated. Leading `x-amz-meta-`
+ * would double-prefix once the SDK adds its own, so we strip it defensively
+ * even though the client isn't supposed to send it.
+ */
+const metadataSchema = z.object({
+  contentType: z.string().trim().min(1).optional(),
+  userMetadata: z.record(z.string(), z.string()),
+});
+
+/** HEAD the object — size/etag/storage-class/content-type/user metadata. */
+connectionsRoute.get("/:id/buckets/:bucket/objects/head", async (c) => {
+  const conn = getConnection(c.req.param("id"));
+  if (!conn) return c.json({ error: "Not found" }, 404);
+  const key = c.req.query("key");
+  if (!key) return c.json({ error: "Missing ?key=" }, 400);
+  const versionId = c.req.query("versionId") || undefined;
+  try {
+    const out = await headObject(conn, c.req.param("bucket"), key, versionId);
+    return c.json(out);
+  } catch (err) {
+    return c.json(upstreamError(err), 502);
+  }
+});
+
+connectionsRoute.get("/:id/buckets/:bucket/objects/tags", async (c) => {
+  const conn = getConnection(c.req.param("id"));
+  if (!conn) return c.json({ error: "Not found" }, 404);
+  const key = c.req.query("key");
+  if (!key) return c.json({ error: "Missing ?key=" }, 400);
+  const versionId = c.req.query("versionId") || undefined;
+  try {
+    const tags = await getObjectTags(
+      conn,
+      c.req.param("bucket"),
+      key,
+      versionId
+    );
+    return c.json({ tags });
+  } catch (err) {
+    return c.json(upstreamError(err), 502);
+  }
+});
+
+connectionsRoute.put("/:id/buckets/:bucket/objects/tags", async (c) => {
+  const conn = getConnection(c.req.param("id"));
+  if (!conn) return c.json({ error: "Not found" }, 404);
+  const key = c.req.query("key");
+  if (!key) return c.json({ error: "Missing ?key=" }, 400);
+  const versionId = c.req.query("versionId") || undefined;
+  const body = await c.req.json().catch(() => null);
+  const parsed = tagSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json({ error: "Invalid payload", detail: parsed.error.message }, 400);
+  }
+  try {
+    await putObjectTags(
+      conn,
+      c.req.param("bucket"),
+      key,
+      parsed.data.tags,
+      versionId
+    );
+    return c.json({ ok: true });
+  } catch (err) {
+    return c.json(upstreamError(err), 502);
+  }
+});
+
+/**
+ * Replace contentType + userMetadata on an existing key. Implemented as
+ * CopyObject onto itself with `MetadataDirective: REPLACE` server-side
+ * (see updateObjectMetadata in lib/s3.ts).
+ */
+connectionsRoute.put("/:id/buckets/:bucket/objects/metadata", async (c) => {
+  const conn = getConnection(c.req.param("id"));
+  if (!conn) return c.json({ error: "Not found" }, 404);
+  const key = c.req.query("key");
+  if (!key) return c.json({ error: "Missing ?key=" }, 400);
+  const body = await c.req.json().catch(() => null);
+  const parsed = metadataSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json({ error: "Invalid payload", detail: parsed.error.message }, 400);
+  }
+  const normalized: Record<string, string> = {};
+  for (const [k, v] of Object.entries(parsed.data.userMetadata)) {
+    const clean = k.toLowerCase().replace(/^x-amz-meta-/, "");
+    if (clean.length === 0) continue;
+    normalized[clean] = v;
+  }
+  try {
+    await updateObjectMetadata(
+      conn,
+      c.req.param("bucket"),
+      key,
+      normalized,
+      parsed.data.contentType
+    );
+    return c.json({ ok: true });
+  } catch (err) {
+    return c.json(upstreamError(err), 502);
+  }
+});

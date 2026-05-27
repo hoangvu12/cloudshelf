@@ -11,10 +11,13 @@ import {
   FileQuestion,
   Link as LinkIcon,
   Loader2,
+  Plus,
   X,
 } from "@/lib/icons";
 
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { formatBytes, formatFileTime } from "@/lib/format";
 import { fileAppearance, previewKind, type PreviewKind } from "@/lib/file-types";
 import {
@@ -25,6 +28,12 @@ import {
 import { basename } from "@/lib/object-path";
 import { fetchDownloadUrl, usePreviewUrl } from "@/lib/api/objects";
 import { useObjects } from "@/lib/api/objects";
+import {
+  useObjectHead,
+  useObjectTags,
+  usePutObjectTags,
+  useUpdateObjectMetadata,
+} from "@/lib/api/object-info";
 import { usePreviewStore } from "@/stores/preview";
 import { useCopied } from "@/lib/use-copied";
 import {
@@ -32,7 +41,7 @@ import {
   DrawerContent,
   DrawerTitle,
 } from "@/components/ui/drawer";
-import type { S3ObjectEntry } from "@server/types";
+import type { ObjectTag, S3ObjectEntry } from "@server/types";
 
 /** Cap how much of a text/code file we'll pull down for inline preview. */
 const TEXT_PREVIEW_BYTES = 512 * 1024;
@@ -264,6 +273,12 @@ function PreviewBody({
   kind: PreviewKind;
   entry: S3ObjectEntry | null;
 }) {
+  // HEAD adds the bits the listing page doesn't carry: Content-Type and
+  // x-amz-meta-* user metadata. Cheap (one tiny request) and the result is
+  // cached by React Query keyed on connection+bucket+key so prev/next reuses
+  // it if the user walks back to a previously-viewed file.
+  const head = useObjectHead(connectionId, bucket, objectKey);
+
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
       <PreviewMedia
@@ -275,6 +290,7 @@ function PreviewBody({
         size={entry?.size}
       />
 
+      <SectionHeader title="Details" />
       <dl className="divide-border divide-y font-mono text-[11px]">
         <Row label="Name" value={name} />
         <Row label="Size" value={entry ? formatBytes(entry.size) : "-"} />
@@ -283,9 +299,397 @@ function PreviewBody({
           value={entry ? formatFileTime(entry.lastModified) : "-"}
         />
         <Row label="Key" value={entry?.key ?? objectKey} />
+        {head.data?.contentType && (
+          <Row label="Type" value={head.data.contentType} />
+        )}
         {entry?.etag && <Row label="ETag" value={entry.etag} />}
         {entry?.storageClass && <Row label="Storage" value={entry.storageClass} />}
       </dl>
+
+      <MetadataSection
+        connectionId={connectionId}
+        bucket={bucket}
+        objectKey={objectKey}
+        head={head.data}
+        loading={head.isPending}
+        error={head.error}
+      />
+
+      <TagsSection
+        connectionId={connectionId}
+        bucket={bucket}
+        objectKey={objectKey}
+      />
+    </div>
+  );
+}
+
+// ─── Metadata + Tags sections ──────────────────────────────────────────────
+// The panel scroll is structured as a series of sections: Details (read-only
+// dl), Metadata (editable contentType + x-amz-meta-*), Tags. Each section is
+// announced by a SectionHeader bar — same chrome as the kind/counter bar at
+// the top so the user reads it as a peer header, not as another row label.
+// Section bodies handle their own padding so the dl can sit flush.
+//
+// Metadata persists contentType + x-amz-meta-* in one CopyObject-REPLACE call.
+// Tags writes via the separate ?tagging subresource — which many S3-compatibles
+// (telegram-s3, some Garage builds) don't implement, so the section catches
+// the upstream error and explains rather than toast-spamming.
+
+function SectionHeader({
+  title,
+  trailing,
+}: {
+  title: string;
+  trailing?: React.ReactNode;
+}) {
+  return (
+    <div className="border-border bg-input-bg/30 text-foreground flex shrink-0 items-center justify-between border-y px-4 py-2.5 font-mono text-[10px] font-semibold tracking-wider uppercase">
+      <span>{title}</span>
+      {trailing && (
+        <span className="text-muted-foreground font-normal">{trailing}</span>
+      )}
+    </div>
+  );
+}
+
+function SectionBody({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="px-4 py-5 font-mono text-[11px]">{children}</div>
+  );
+}
+
+function MetadataSection({
+  connectionId,
+  bucket,
+  objectKey,
+  head,
+  loading,
+  error,
+}: {
+  connectionId: string;
+  bucket: string;
+  objectKey: string;
+  head:
+    | { contentType?: string; userMetadata: Record<string, string> }
+    | undefined;
+  loading: boolean;
+  error: Error | null;
+}) {
+  const [rows, setRows] = React.useState<{ key: string; value: string }[]>([]);
+  const [contentType, setContentType] = React.useState("");
+  const [dirty, setDirty] = React.useState(false);
+
+  // Seed once when HEAD arrives, and reset whenever the key changes — prev/next
+  // walks should never carry one file's edits onto another.
+  React.useEffect(() => {
+    if (!head) return;
+    setRows(
+      Object.entries(head.userMetadata).map(([key, value]) => ({ key, value }))
+    );
+    setContentType(head.contentType ?? "");
+    setDirty(false);
+  }, [head, objectKey]);
+
+  const update = useUpdateObjectMetadata(connectionId, bucket, {
+    onSuccess: () => {
+      toast.success("Metadata saved");
+      setDirty(false);
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  if (loading) {
+    return (
+      <>
+        <SectionHeader title="Metadata" />
+        <SectionBody>
+          <ShellLoading />
+        </SectionBody>
+      </>
+    );
+  }
+  if (error || !head) {
+    return (
+      <>
+        <SectionHeader title="Metadata" />
+        <SectionBody>
+          <ShellError message={error?.message} />
+        </SectionBody>
+      </>
+    );
+  }
+
+  const setRow = (i: number, patch: Partial<{ key: string; value: string }>) => {
+    setRows((prev) =>
+      prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r))
+    );
+    setDirty(true);
+  };
+  const removeRow = (i: number) => {
+    setRows((prev) => prev.filter((_, idx) => idx !== i));
+    setDirty(true);
+  };
+  const addRow = () => {
+    setRows((prev) => [...prev, { key: "", value: "" }]);
+    setDirty(true);
+  };
+
+  const handleSave = () => {
+    const userMetadata: Record<string, string> = {};
+    for (const { key, value } of rows) {
+      const k = key.trim().toLowerCase();
+      if (!k) continue;
+      userMetadata[k] = value;
+    }
+    update.mutate({
+      key: objectKey,
+      contentType: contentType.trim() || undefined,
+      userMetadata,
+    });
+  };
+
+  return (
+    <>
+      <SectionHeader title="Metadata" />
+      <SectionBody>
+        <div className="space-y-2">
+          <FieldLabel>Content-type</FieldLabel>
+          <Input
+            className="h-9 text-[11px]"
+            value={contentType}
+            placeholder="application/octet-stream"
+            onChange={(e) => {
+              setContentType(e.target.value);
+              setDirty(true);
+            }}
+          />
+        </div>
+
+        <div className="mt-7 space-y-3">
+          <FieldLabel>Custom headers</FieldLabel>
+          {rows.length > 0 && (
+            <div className="space-y-2">
+              {rows.map((r, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <Input
+                    className="h-9 flex-1 text-[11px]"
+                    placeholder="key"
+                    value={r.key}
+                    onChange={(e) => setRow(i, { key: e.target.value })}
+                  />
+                  <Input
+                    className="h-9 flex-1 text-[11px]"
+                    placeholder="value"
+                    value={r.value}
+                    onChange={(e) => setRow(i, { value: e.target.value })}
+                  />
+                  <Button
+                    size="icon-sm"
+                    variant="ghost"
+                    aria-label="Remove row"
+                    onClick={() => removeRow(i)}
+                  >
+                    <X className="size-3" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="mt-6 flex items-center justify-between gap-3">
+          <Button size="xs" variant="outline" onClick={addRow}>
+            <Plus className="size-3" /> Add header
+          </Button>
+          <Button
+            size="sm"
+            onClick={handleSave}
+            disabled={!dirty || update.isPending}
+          >
+            {update.isPending ? "Saving..." : "Save"}
+          </Button>
+        </div>
+      </SectionBody>
+    </>
+  );
+}
+
+const MAX_TAGS = 10;
+const MAX_TAG_KEY = 128;
+const MAX_TAG_VALUE = 256;
+
+function TagsSection({
+  connectionId,
+  bucket,
+  objectKey,
+}: {
+  connectionId: string;
+  bucket: string;
+  objectKey: string;
+}) {
+  const tagsQuery = useObjectTags(connectionId, bucket, objectKey);
+  const [rows, setRows] = React.useState<ObjectTag[]>([]);
+  const [dirty, setDirty] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!tagsQuery.data) return;
+    setRows(tagsQuery.data.tags);
+    setDirty(false);
+  }, [tagsQuery.data, objectKey]);
+
+  const put = usePutObjectTags(connectionId, bucket, {
+    onSuccess: () => {
+      toast.success("Tags saved");
+      setDirty(false);
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  if (tagsQuery.isPending) {
+    return (
+      <>
+        <SectionHeader title="Tags" />
+        <SectionBody>
+          <ShellLoading />
+        </SectionBody>
+      </>
+    );
+  }
+
+  // The most common failure mode here isn't a real outage — it's the backend
+  // not implementing GetObjectTagging at all (telegram-s3 and some others).
+  // Show a calm explanatory note instead of an angry error, but keep the
+  // upstream detail visible so it's obvious what happened.
+  if (tagsQuery.error) {
+    return (
+      <>
+        <SectionHeader title="Tags" trailing="unsupported" />
+        <SectionBody>
+          <div className="text-muted-foreground space-y-1">
+            <div>Tagging isn't supported on this backend.</div>
+            <div className="text-foreground/50 break-all text-[10px]">
+              {tagsQuery.error.message}
+            </div>
+          </div>
+        </SectionBody>
+      </>
+    );
+  }
+
+  const setRow = (i: number, patch: Partial<ObjectTag>) => {
+    setRows((prev) =>
+      prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r))
+    );
+    setDirty(true);
+  };
+  const removeRow = (i: number) => {
+    setRows((prev) => prev.filter((_, idx) => idx !== i));
+    setDirty(true);
+  };
+  const addRow = () => {
+    if (rows.length >= MAX_TAGS) return;
+    setRows((prev) => [...prev, { key: "", value: "" }]);
+    setDirty(true);
+  };
+
+  const handleSave = () => {
+    const cleaned: ObjectTag[] = [];
+    for (const { key, value } of rows) {
+      const k = key.trim();
+      if (!k) continue;
+      cleaned.push({ key: k, value });
+    }
+    put.mutate({ key: objectKey, tags: cleaned });
+  };
+
+  return (
+    <>
+      <SectionHeader
+        title="Tags"
+        trailing={`${rows.length} / ${MAX_TAGS}`}
+      />
+      <SectionBody>
+        {rows.length > 0 && (
+          <div className="space-y-2">
+            {rows.map((r, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <Input
+                  className="h-9 flex-1 text-[11px]"
+                  placeholder="key"
+                  maxLength={MAX_TAG_KEY}
+                  value={r.key}
+                  onChange={(e) => setRow(i, { key: e.target.value })}
+                />
+                <Input
+                  className="h-9 flex-1 text-[11px]"
+                  placeholder="value"
+                  maxLength={MAX_TAG_VALUE}
+                  value={r.value}
+                  onChange={(e) => setRow(i, { value: e.target.value })}
+                />
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label="Remove tag"
+                  onClick={() => removeRow(i)}
+                >
+                  <X className="size-3" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div
+          className={cn(
+            "flex items-center justify-between gap-3",
+            rows.length > 0 && "mt-6"
+          )}
+        >
+          <Button
+            size="xs"
+            variant="outline"
+            onClick={addRow}
+            disabled={rows.length >= MAX_TAGS}
+          >
+            <Plus className="size-3" /> Add tag
+          </Button>
+          <Button
+            size="sm"
+            onClick={handleSave}
+            disabled={!dirty || put.isPending}
+          >
+            {put.isPending ? "Saving..." : "Save"}
+          </Button>
+        </div>
+      </SectionBody>
+    </>
+  );
+}
+
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="text-muted-foreground text-[10px] uppercase tracking-wider">
+      {children}
+    </div>
+  );
+}
+
+function ShellLoading() {
+  return (
+    <div className="text-muted-foreground flex items-center gap-2 py-2">
+      <Loader2 className="size-3.5 animate-spin" />
+      Loading...
+    </div>
+  );
+}
+
+function ShellError({ message }: { message?: string }) {
+  return (
+    <div className="text-destructive flex items-center gap-2 py-2">
+      <AlertTriangle className="size-3.5" />
+      {message ?? "Couldn't load"}
     </div>
   );
 }
@@ -752,7 +1156,7 @@ function tokenStyle(t: ThemedToken): React.CSSProperties {
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-start gap-3 px-3 py-2">
+    <div className="flex items-start gap-3 px-4 py-2.5">
       <dt className="text-muted-foreground w-20 shrink-0 text-[10px] tracking-wider uppercase">
         {label}
       </dt>
