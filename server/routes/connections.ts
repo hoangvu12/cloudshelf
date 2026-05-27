@@ -30,7 +30,9 @@ import {
   putObjectTags,
   restoreObjectVersion,
   setBucketVersioning,
+  StreamSizeExceededError,
   updateObjectMetadata,
+  uploadFromStream,
 } from "../lib/s3.ts";
 import type { S3Connection } from "../types.ts";
 
@@ -520,6 +522,132 @@ connectionsRoute.post(
       );
       return c.json(out);
     } catch (err) {
+      return c.json(upstreamError(err), 502);
+    }
+  }
+);
+
+// ─── Upload from URL (server-side streaming) ───────────────────────────────
+// Browser CORS prevents fetching arbitrary third-party URLs from the SPA, so
+// "From URL" rides on the server: fetch the upstream URL, stream its body
+// straight into S3 via Upload from @aws-sdk/lib-storage (which auto-switches
+// to multipart past 5 MB), and never buffer the full payload locally. We
+// validate the scheme + hostname first so the route can't be coaxed into
+// reading file:// URIs or hitting internal services on the host network.
+
+/** Per-call streamed size cap. 1 GB is plenty for any typical "grab this
+ *  remote image / pdf / archive" use case and keeps abuse vectors capped. */
+const FROM_URL_SIZE_CAP_BYTES = 1024 * 1024 * 1024;
+
+/**
+ * Reject URLs that resolve to the host's own network or are otherwise unsafe
+ * to fetch on behalf of the user. A simple hostname-prefix check covers the
+ * common attack surface (SSRF into localhost, loopback, link-local, RFC1918
+ * ranges). We deliberately don't DNS-resolve and re-check — that's a deeper
+ * SSRF guard than this single-user app needs.
+ */
+function isPrivateHostname(host: string): boolean {
+  const h = host.toLowerCase();
+  if (h === "localhost" || h.endsWith(".localhost")) return true;
+  if (h === "127.0.0.1" || h.startsWith("127.")) return true;
+  if (h === "0.0.0.0") return true;
+  // IPv6 loopback / link-local.
+  if (h === "::1" || h === "[::1]") return true;
+  if (h.startsWith("fe80:") || h.startsWith("[fe80:")) return true;
+  // RFC1918 ranges.
+  if (h.startsWith("10.")) return true;
+  if (h.startsWith("192.168.")) return true;
+  if (/^172\.(1[6-9]|2\d|3[0-1])\./.test(h)) return true;
+  // Link-local + carrier-NAT.
+  if (h.startsWith("169.254.")) return true;
+  if (/^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(h)) return true;
+  return false;
+}
+
+const fromUrlSchema = z.object({
+  url: z.string().trim().url(),
+  key: z.string().trim().min(1),
+});
+
+connectionsRoute.post(
+  "/:id/buckets/:bucket/objects/from-url",
+  async (c) => {
+    const conn = getConnection(c.req.param("id"));
+    if (!conn) return c.json({ error: "Not found" }, 404);
+    const body = await c.req.json().catch(() => null);
+    const parsed = fromUrlSchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json(
+        { error: "Invalid payload", detail: parsed.error.message },
+        400
+      );
+    }
+    let url: URL;
+    try {
+      url = new URL(parsed.data.url);
+    } catch {
+      return c.json({ error: "Invalid URL" }, 400);
+    }
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return c.json(
+        { error: "Only http(s) URLs are allowed" },
+        400
+      );
+    }
+    if (isPrivateHostname(url.hostname)) {
+      return c.json(
+        { error: "Refusing to fetch internal / private hostnames" },
+        400
+      );
+    }
+    let upstream: Response;
+    try {
+      upstream = await fetch(url, { redirect: "follow" });
+    } catch (err) {
+      return c.json(
+        {
+          error: "Couldn't fetch URL",
+          detail: err instanceof Error ? err.message : String(err),
+        },
+        502
+      );
+    }
+    if (!upstream.ok) {
+      return c.json(
+        {
+          error: `Upstream returned ${upstream.status}`,
+          detail: upstream.statusText,
+        },
+        502
+      );
+    }
+    if (!upstream.body) {
+      return c.json({ error: "Upstream returned an empty body" }, 502);
+    }
+    const lenHeader = upstream.headers.get("content-length");
+    const contentLength = lenHeader ? Number(lenHeader) : undefined;
+    const contentType =
+      upstream.headers.get("content-type") ?? "application/octet-stream";
+    try {
+      await uploadFromStream(
+        conn,
+        c.req.param("bucket"),
+        parsed.data.key,
+        upstream.body,
+        contentType,
+        Number.isFinite(contentLength) ? contentLength : undefined,
+        FROM_URL_SIZE_CAP_BYTES
+      );
+      return c.json({ ok: true, key: parsed.data.key, contentType });
+    } catch (err) {
+      if (err instanceof StreamSizeExceededError) {
+        return c.json(
+          {
+            error: `Upstream exceeded ${FROM_URL_SIZE_CAP_BYTES}-byte cap`,
+          },
+          413
+        );
+      }
       return c.json(upstreamError(err), 502);
     }
   }

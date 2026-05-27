@@ -22,6 +22,7 @@ import { ObjectGrid } from "@/components/object-grid";
 import type { RowClickModifiers } from "@/components/object-row";
 import { ObjectToolbar } from "@/components/object-toolbar";
 import { UploadDropzone, type UploadInputFile } from "@/components/upload-dropzone";
+import { UploadFromUrlDialog } from "@/components/upload-from-url-dialog";
 import { formatBytes, formatCount } from "@/lib/format";
 import {
   basename,
@@ -123,6 +124,7 @@ export function ObjectBrowser({
   const [copyToOpen, setCopyToOpen] = React.useState(false);
   const [deleteOpen, setDeleteOpen] = React.useState(false);
   const [bucketSettingsOpen, setBucketSettingsOpen] = React.useState(false);
+  const [uploadFromUrlOpen, setUploadFromUrlOpen] = React.useState(false);
   /** Captured at the moment "Rename" is invoked so the dialog has a stable target. */
   const [renameTarget, setRenameTarget] = React.useState<S3Entry | null>(null);
 
@@ -888,6 +890,60 @@ export function ObjectBrowser({
     setManySelected,
   ]);
 
+  // ─── Paste-from-clipboard upload ────────────────────────────────────────
+  // When the user pastes image bytes (Cmd/Ctrl-V or context-menu paste) into
+  // the object browser, route the blobs through the same upload queue as
+  // drag-drop and folder-picker. Short-circuit while the user is editing
+  // text — hijacking paste inside an input would surprise them. The handler
+  // also bails when a dialog is open (the dialog owns the focused input and
+  // its own paste behavior).
+  //
+  // Reads handleUploadFiles + prefix through a ref so the listener doesn't
+  // rebind on every render; addFiles already drains through Uppy with
+  // meta.relativePath set per convention #10.
+  const pasteRef = React.useRef({ handleUploadFiles, prefix });
+  pasteRef.current = { handleUploadFiles, prefix };
+
+  React.useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      if (isEditableTarget(e.target)) return;
+      // Some browsers leave document.activeElement on a focused input even
+      // when the event target is the document; double-check.
+      if (isEditableTarget(document.activeElement)) return;
+      const items = e.clipboardData?.items;
+      if (!items || items.length === 0) return;
+      const files: UploadInputFile[] = [];
+      const stamp = nowStamp();
+      let idx = 0;
+      for (const it of Array.from(items)) {
+        if (it.kind !== "file") continue;
+        const blob = it.getAsFile();
+        if (!blob) continue;
+        // Only intercept image-type blobs — non-image pastes (e.g. a copied
+        // file from Finder) are rare and would surprise users by quietly
+        // queuing themselves. Drag-drop is the explicit path for that.
+        if (!blob.type.startsWith("image/")) continue;
+        const ext = extensionForMime(blob.type) ?? "bin";
+        const suffix = idx === 0 ? "" : `-${idx + 1}`;
+        const name = `pasted-${stamp}${suffix}.${ext}`;
+        // Re-wrap as a File so the rest of the upload pipeline (which reads
+        // .name) gets a friendly filename; the underlying blob bytes are
+        // unchanged.
+        const file = new File([blob], name, {
+          type: blob.type,
+          lastModified: Date.now(),
+        });
+        files.push({ file, relativePath: name });
+        idx += 1;
+      }
+      if (files.length === 0) return;
+      e.preventDefault();
+      pasteRef.current.handleUploadFiles(files);
+    };
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  }, []);
+
   // ─── Render ─────────────────────────────────────────────────────────────
   return (
     <UploadDropzone
@@ -923,6 +979,7 @@ export function ObjectBrowser({
         filterInputRef={filterInputRef}
         onUpload={() => openPickerRef.current?.()}
         onUploadFolder={() => openFolderPickerRef.current?.()}
+        onUploadFromUrl={() => setUploadFromUrlOpen(true)}
         onNewFolder={() => setNewFolderOpen(true)}
         onClearSelection={() => {
           clearSelection();
@@ -1028,6 +1085,13 @@ export function ObjectBrowser({
         onOpenChange={setBucketSettingsOpen}
         connectionId={connectionId}
         bucket={bucket}
+      />
+      <UploadFromUrlDialog
+        open={uploadFromUrlOpen}
+        onOpenChange={setUploadFromUrlOpen}
+        connectionId={connectionId}
+        bucket={bucket}
+        prefix={prefix}
       />
     </UploadDropzone>
   );
@@ -1159,4 +1223,31 @@ function BodyRenderer(props: {
     );
   }
   return <ObjectList {...props} />;
+}
+
+/** File-safe ISO-ish timestamp for `pasted-${stamp}.png` keys. Colons are
+ *  legal in S3 but awkward on Windows downloads, so we substitute hyphens. */
+function nowStamp(): string {
+  return new Date().toISOString().replace(/[:.]/g, "-");
+}
+
+/**
+ * Map common image MIME types to a sensible file extension. The fallback is
+ * undefined (caller falls back to "bin") so an exotic clipboard MIME doesn't
+ * land as a misleading `.png`.
+ */
+function extensionForMime(mime: string): string | undefined {
+  const m = mime.toLowerCase();
+  if (m === "image/png") return "png";
+  if (m === "image/jpeg" || m === "image/jpg") return "jpg";
+  if (m === "image/gif") return "gif";
+  if (m === "image/webp") return "webp";
+  if (m === "image/avif") return "avif";
+  if (m === "image/bmp") return "bmp";
+  if (m === "image/svg+xml") return "svg";
+  if (m === "image/heic") return "heic";
+  if (m === "image/heif") return "heif";
+  if (m === "image/tiff") return "tiff";
+  if (m.startsWith("image/")) return m.slice("image/".length);
+  return undefined;
 }

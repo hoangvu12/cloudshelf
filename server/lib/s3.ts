@@ -21,6 +21,7 @@ import {
   type StorageClass,
   UploadPartCommand,
 } from "@aws-sdk/client-s3";
+import { Upload } from "@aws-sdk/lib-storage";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import type {
   Bucket,
@@ -813,6 +814,97 @@ export async function restoreObjectVersion(
         CopySource: `/${bucket}/${encoded}?versionId=${encodeURIComponent(versionId)}`,
       })
     );
+  } finally {
+    client.destroy();
+  }
+}
+
+// ─── Streaming uploads (server-side) ───────────────────────────────────────
+//
+// Used by the "Upload from URL" route. We don't go through presigned URLs here
+// because the source bytes live on a third-party server the browser can't
+// generally reach with CORS — the request fans out from this process, streams
+// the upstream response body straight into `Upload` from `@aws-sdk/lib-storage`,
+// and never buffers the full payload. `Upload` transparently switches to
+// multipart for bodies past the 5 MB SDK threshold, so we don't need a
+// separate single-vs-multipart split here.
+
+/** Error thrown when the streamed upload exceeds the per-call byte cap. */
+export class StreamSizeExceededError extends Error {
+  readonly limit: number;
+  constructor(limit: number) {
+    super(`Stream exceeded ${limit} byte cap`);
+    this.name = "StreamSizeExceededError";
+    this.limit = limit;
+  }
+}
+
+/**
+ * Wrap a ReadableStream with a byte-counting passthrough that aborts the
+ * stream the moment a hard cap is exceeded. Counting happens before the bytes
+ * are forwarded downstream so an oversized chunk never leaks into the upload.
+ */
+function capStream(
+  body: ReadableStream<Uint8Array>,
+  cap: number
+): ReadableStream<Uint8Array> {
+  let seen = 0;
+  return body.pipeThrough(
+    new TransformStream<Uint8Array, Uint8Array>({
+      transform(chunk, controller) {
+        seen += chunk.byteLength;
+        if (seen > cap) {
+          controller.error(new StreamSizeExceededError(cap));
+          return;
+        }
+        controller.enqueue(chunk);
+      },
+    })
+  );
+}
+
+/**
+ * Stream a body straight into S3 via `@aws-sdk/lib-storage`'s `Upload`. The
+ * helper handles single-PUT vs. multipart internally — past the 5 MB
+ * threshold it auto-switches to multipart and uploads parts in parallel.
+ *
+ * `sizeCapBytes` is enforced upstream of the SDK via a passthrough
+ * TransformStream so a pathological URL can't OOM the process — chunks past
+ * the cap surface as a `StreamSizeExceededError` and abort the underlying
+ * multipart upload (the SDK does the AbortMultipartUpload for us on throw).
+ */
+export async function uploadFromStream(
+  conn: S3Connection,
+  bucket: string,
+  key: string,
+  body: ReadableStream<Uint8Array>,
+  contentType?: string,
+  contentLength?: number,
+  sizeCapBytes?: number
+): Promise<void> {
+  const client = createS3Client(conn);
+  try {
+    // If the upstream advertised a Content-Length larger than the cap, refuse
+    // before we even open the multipart upload — saves one S3 round-trip.
+    if (
+      sizeCapBytes !== undefined &&
+      contentLength !== undefined &&
+      contentLength > sizeCapBytes
+    ) {
+      throw new StreamSizeExceededError(sizeCapBytes);
+    }
+    const capped =
+      sizeCapBytes !== undefined ? capStream(body, sizeCapBytes) : body;
+    const upload = new Upload({
+      client,
+      params: {
+        Bucket: bucket,
+        Key: key,
+        Body: capped,
+        ContentType: contentType,
+      },
+    });
+    await upload.done();
   } finally {
     client.destroy();
   }

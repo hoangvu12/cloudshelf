@@ -831,11 +831,130 @@ caller before being lifted to a shared helper.
 
 None directly — Phase 9 was a no-deps leaf.
 
-### Eligibility snapshot (as of Phase 9 ship)
+### Phase 16 — shipped ✅ (commit `feat(uploads): paste + URL upload`)
+
+Shipped close to spec. Both paths drop new objects into the current prefix,
+but they use very different transport: paste reuses the existing Uppy queue
+(bytes travel browser → S3 directly via presigned PUT), while "From URL"
+runs entirely on the server (bytes travel upstream → server → S3, never
+through the browser).
+
+**A) Paste from clipboard:**
+
+- `src/components/object-browser.tsx` — new `window`-level `paste` listener
+  installed inside the `ObjectBrowser` effect block. Reads
+  `e.clipboardData?.items`, filters to `kind: "file"` blobs with an
+  `image/*` MIME, re-wraps each as a `File` named
+  `pasted-${ISO-timestamp}[-${n}].${ext}` (extension comes from the MIME),
+  and pushes through the existing `handleUploadFiles` path — same as
+  drag-drop or the folder picker. `meta.relativePath` is set to the
+  generated leaf so Uppy's `generateFileID` disambiguates same-name files
+  if a user pastes twice in quick succession (convention #10).
+- **Short-circuits for paste in editables.** `isEditableTarget(e.target)`
+  bails when the user is typing in an input/textarea/contentEditable; we
+  also re-check `document.activeElement` for the case where the event
+  bubbles to `window` while a dialog input is focused. Plain `Ctrl-V` on
+  text never gets hijacked.
+- Only image MIMEs are intercepted. A `Cmd-V` of a Finder-copied
+  spreadsheet would otherwise silently queue itself; drag-drop is the
+  explicit path for non-image clipboard contents and stays unsurprising.
+- The new private helpers `nowStamp()` and `extensionForMime(mime)` are
+  file-local to `object-browser.tsx` — both are intentionally small and
+  not extracted to `lib/`, since no other call site needs them yet.
+
+**B) Upload from URL (server-side streaming):**
+
+- `package.json` — `@aws-sdk/lib-storage@^3.1054.0` added. Brings the
+  `Upload` helper, which transparently chooses single-PUT vs. multipart
+  past the 5 MB SDK threshold. The peer-dep mismatch warning Bun prints
+  (lib-storage's pinned client-s3 vs ours) is benign for our flow.
+- `server/lib/s3.ts` — new `uploadFromStream(conn, bucket, key, body,
+  contentType?, contentLength?, sizeCapBytes?)` matches the
+  try/finally + `client.destroy()` shape every other helper in the file
+  uses. A `capStream(body, cap)` passthrough TransformStream counts bytes
+  before forwarding chunks; the moment `seen > cap` it errors the
+  controller with a new `StreamSizeExceededError`, which aborts the
+  multipart upload (the SDK does the `AbortMultipartUpload` for us on
+  throw). Content-Length advertised over the cap is rejected before we
+  even open the multipart upload.
+- `server/routes/connections.ts` — `POST /:id/buckets/:bucket/objects/from-url`
+  body `{ url, key }`. Validates via `fromUrlSchema` (Zod), then:
+  1. URL scheme must be `http:` / `https:` — `file://`, `data:`, etc. → 400
+  2. Hostname must NOT match the new `isPrivateHostname()` predicate, which
+     blocks `localhost`, `127.0.0.1` / `127.*`, `0.0.0.0`, IPv6 loopback,
+     `fe80:` link-local, RFC1918 (`10.`, `192.168.`, `172.16-31.`),
+     `169.254.` link-local, and `100.64-127.` carrier-NAT. A simple
+     hostname-prefix check is enough for a single-user app — no recursive
+     DNS resolve / TOCTOU guard.
+  3. `fetch(url, { redirect: "follow" })`, surface non-2xx as a 502.
+  4. Pull `Content-Length` (optional) + `Content-Type` (fallback
+     `application/octet-stream`) off the upstream response.
+  5. Hand `upstream.body` (a `ReadableStream<Uint8Array>`) straight into
+     `uploadFromStream` with the 1 GB cap. The SDK calls `AbortMultipartUpload`
+     for us if we throw mid-stream.
+  6. `StreamSizeExceededError` → `413 Payload Too Large` with a clear
+     message; everything else → `502` via the uniform `upstreamError()`
+     envelope.
+- `src/lib/api/upload-from-url.ts` — per-resource convention #6.
+  `useUploadFromUrl(connectionId, bucket)` mutation, `onSuccess`
+  invalidates `objectKeys.bucket(connectionId, bucket)` so the new key
+  shows up in any open listing without manual refresh. Uses the convention
+  #5 `(...args)` spread so the new react-query types stay happy.
+- `src/components/upload-from-url-dialog.tsx` — local-state dialog (no
+  zustand store; the toolbar mounts it directly so convention #7 isn't
+  needed). Two `Input`s for URL + filename, with the filename
+  auto-tracking the URL's last path segment until the user types into it
+  (a `filenameDirty` flag locks the field on first edit). The final S3
+  key is `normalizePrefix(prefix) + trimmedFilename`. Submit fires
+  through `useUploadFromUrl.mutate`; status walks a single sonner toast
+  id `loading → success/failure`. A muted note advertises the 1 GB cap +
+  internal-host policy so users know upfront.
+- `src/components/object-toolbar.tsx` — new `onUploadFromUrl: () => void`
+  prop and a `"From URL"` button between "Upload folder" and "New folder",
+  styled `variant="outline"` to match the existing folder-picker entry.
+  Icon: `CloudUpload` (Material Symbols `cloud_upload-fill`) — already
+  exported from `lib/icons.ts`, no new icon added.
+- `src/components/object-browser.tsx` — new `uploadFromUrlOpen` state +
+  `<UploadFromUrlDialog>` mounted once next to `<BucketSettingsDialog>`.
+
+**Deviations from spec:**
+
+- The spec says the cap is enforced "before exceeding the cap". We do
+  *both* — refuse upfront if upstream advertises a Content-Length over
+  the cap, AND tear down the multipart upload mid-stream via the
+  TransformStream cap. Belt-and-braces; the upfront check saves one
+  multipart round-trip on the easy case, the cap-stream is the
+  authoritative defense.
+- The SSRF guard is a hostname-prefix check, not a DNS-resolve + recheck
+  loop. Trade-off documented inline in the helper. This app is
+  single-user / self-hosted; a deeper SSRF guard would be over-engineered
+  for the threat model.
+- The dialog uses local state, not a zustand store (convention #7), per
+  the spec note: only the toolbar mounts it, so prop-drilling isn't a
+  concern.
+- Paste explicitly limits itself to image MIME types. The spec said
+  "Blobs with image MIME", which I read literally — non-image pastes
+  fall through to native browser behavior.
+
+### Conventions earned in Phase 16 — reuse in later phases
+
+None new. Phase 16 is a clean application of #5 (mutation onSuccess
+spread), #6 (per-resource API file), and #10 (`meta.relativePath` on every
+queued file). The new server-side `uploadFromStream` helper is reusable
+for any future "server fetches body, server PUTs to S3" flow (e.g. a
+hypothetical "import from another bucket" path) — but it's not a numbered
+convention yet because the only caller is `from-url`. If a second
+streaming-upload route ever lands, lift the size-cap TransformStream
+pattern into its own helper at that time.
+
+### Phases unblocked by Phase 16
+
+None — Phase 16 is a leaf.
+
+### Eligibility snapshot (as of Phase 16 ship)
 
 Pickable now, in rough recommend-first order:
 
-- **16** Paste / URL upload (S, no deps — reuse Phase-3 `UploadInputFile`)
 - **17** Activity log (S, no deps)
 - **20** Range-GET video player polish (S, no deps)
 - **10** Object Lock / retention / legal hold (M, unblocked by Phase 5)
@@ -863,7 +982,7 @@ Pickable now, in rough recommend-first order:
 | 13 | Public "shelf" galleries             | M      | 2          |
 | 14 | EXIF panel for images                | S      | 1          | ✅ shipped (see §0.5) |
 | 15 | Connection snippet panel             | S      | —          | ✅ shipped (see §0.5) |
-| 16 | Paste / URL upload                   | S      | —          |
+| 16 | Paste / URL upload                   | S      | —          | ✅ shipped (see §0.5) |
 | 17 | Activity log                         | S      | —          |
 | 18 | Password-protected share links       | M      | 2          |
 | 19 | ZIP-in-place browsing                | L      | —          |

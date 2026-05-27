@@ -2,6 +2,7 @@ import * as React from "react";
 import {
   CheckIcon,
   CheckSquare,
+  CloudUpload,
   Download,
   Eye,
   FolderOutput,
@@ -39,6 +40,7 @@ export function ObjectToolbar({
   filterInputRef,
   onUpload,
   onUploadFolder,
+  onUploadFromUrl,
   onNewFolder,
   onClearSelection,
   onPreview,
@@ -63,6 +65,9 @@ export function ObjectToolbar({
   /** Triggers the directory picker. Drag-drop of folders works without this
    *  via the dropzone, but a discoverable button is worth the extra slot. */
   onUploadFolder: () => void;
+  /** Opens the "From URL" dialog — server-side streaming upload (no Uppy
+   *  involvement, no bytes through the browser). */
+  onUploadFromUrl: () => void;
   onNewFolder: () => void;
   onClearSelection: () => void;
   onPreview: () => void;
@@ -133,6 +138,14 @@ export function ObjectToolbar({
           >
             <FolderUp />
             Upload folder
+          </Button>
+          <Button
+            variant="outline"
+            onClick={onUploadFromUrl}
+            title="Server-side streaming upload — paste a public URL and it lands at the current prefix without touching your bandwidth"
+          >
+            <CloudUpload />
+            From URL
           </Button>
           <Button variant="outline" onClick={onNewFolder}>
             <FolderPlus className="text-accent-blue" />
