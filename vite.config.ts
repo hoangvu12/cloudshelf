@@ -34,4 +34,11 @@ export default defineConfig({
       "/api": { target: API_TARGET, changeOrigin: true },
     },
   },
+  // The Shiki highlighter worker dynamic-imports one chunk per grammar to
+  // keep first-load light; that needs ES-module workers (Vite defaults to
+  // IIFE, which fails build with "code-splitting not supported"). The
+  // runtime side already spawns with { type: "module" }.
+  worker: {
+    format: "es",
+  },
 });
