@@ -537,12 +537,91 @@ shouldn't be lifted into a shared helper yet — wait for a third caller.
 
 None directly.
 
-### Eligibility snapshot (as of Phase 15 ship)
+### Phase 14 — shipped ✅ (commit `feat(preview): EXIF panel for images`)
+
+Shipped exactly as spec'd. EXIF lives as a new section inside
+`file-preview-panel.tsx` (convention #1) between Details and Metadata —
+parallel to where Details sits, since it's read-only "what's in this file"
+info that pairs with the dl above it rather than the user-editable headers
+below.
+
+**`src/lib/api/exif.ts` (new):**
+
+- `useImageExif(url)` — React Query hook keyed on the presigned URL
+  (`exifKeys.parsed`). Range-GETs `bytes=0-131071` from the URL the preview
+  body is already using, then dynamic-imports `exifr` and runs `parse(buf)`.
+  Returns `ImageExif | null` (null when the image has no EXIF segment) and
+  exposes the loose exifr shape — call sites pluck the fields they want.
+- `staleTime: 30m` / `gcTime: 1h` — EXIF is immutable for a given key.
+- `retry: false` — a missing EXIF block isn't a real error and we shouldn't
+  burn the query-client's retry budget on it.
+- `exifr` was already a transitive dep of `@uppy/thumbnail-generator`; we
+  promoted it to a direct `^7.1.3` so we don't silently lose it if Uppy ever
+  drops the dep. Dynamic-imported so the ~24 KB bundle stays out of the
+  main chunk (loads only when the first EXIF-bearing image preview opens).
+
+**`src/components/file-preview-panel.tsx`:**
+
+- New `<ExifSection>` slotted between Details and `<MetadataSection>`.
+  Gated on `head.data?.contentType?.startsWith("image/")` per spec — uses
+  the HEAD-reported MIME, not extension, so HEIC/TIFF/etc. work even when
+  the browser can't render them inline.
+- Reuses `usePreviewUrl` to share the presigned URL with `<PreviewMedia>`
+  via React Query cache — no extra presign call.
+- Renders rows: Camera (`Make Model`), Lens, Shot at, Dimensions, ISO,
+  Shutter, Aperture, Focal, GPS (with a Google Maps link). Each row only
+  appears if its source field is present, so the section's row count
+  shrinks gracefully.
+- **"No EXIF" → hide entire section** (no header, no body). The acceptance
+  spec said "shows nothing (no error)"; an empty header on a PNG would be
+  noise. Also hidden silently while loading/erroring, since a real preview
+  failure surfaces in the media area above.
+- `Row` widened to accept `React.ReactNode` (was `string`) so the GPS row
+  can host an anchor. No other call sites changed.
+
+**Helpers (private to `file-preview-panel.tsx`):**
+
+- `exifRows(data)` — projects the loose exifr object into the row list.
+- `pickDimensions(data)` — tries `ExifImageWidth/Height` first, then
+  falls back to `ImageWidth/Height` and `PixelXDimension/PixelYDimension`
+  for formats that report dims under different tag names.
+- `formatShutter(seconds)` — `1/200s` style for short exposures,
+  `1.3s` for long ones.
+- `GpsLink` — `https://www.google.com/maps?q=lat,lng` in a new tab,
+  styled with `text-accent-blue` and `hover:underline`.
+
+**Deviations from spec:**
+
+- None on behavior. Two clarifications worth flagging:
+  - Section placed **between Details and Metadata**, not at the end after
+    Tags. EXIF is "what's in this file" info, peer to Details — pairing
+    them keeps the read-only material together above the editable
+    Metadata/Tags below.
+  - Gating uses HEAD `contentType` rather than `previewKind(name)`. This
+    is what the spec said ("MIME starts with `image/`"), and it picks up
+    HEIC/TIFF correctly even when extension-based `previewKind` wouldn't.
+
+### Conventions earned in Phase 14 — reuse in later phases
+
+None new. Phase 14 is a clean application of convention #1
+(SectionHeader/SectionBody inside `file-preview-panel.tsx`), #5 (mutation
+onSuccess spread — n/a here, no mutations), and #6 (per-resource API file
+in `src/lib/api/`). The "hide section entirely when there's nothing to
+show" pattern is specific to EXIF — Versioning (Phase 5) and Object Lock
+(Phase 10) should keep their section headers visible with explicit
+"unsupported" / "off" trailing labels per the §0.5 step 3 graceful pattern,
+since those features have meaningful empty states the user might want to
+toggle on. EXIF has no such toggle.
+
+### Phases unblocked by Phase 14
+
+None.
+
+### Eligibility snapshot (as of Phase 14 ship)
 
 Pickable now, in rough recommend-first order:
 
 - **5** Versioning view + restore (M, unblocked by Phase 1)
-- **14** EXIF panel for images (S, unblocked by Phase 1)
 - **9** Storage class on upload (S, no deps)
 - **16** Paste / URL upload (S, no deps — reuse Phase-3 `UploadInputFile`)
 - **17** Activity log (S, no deps)
@@ -569,7 +648,7 @@ Pickable now, in rough recommend-first order:
 | 11 | In-browser text/code/md editor       | M      | 1          |
 | 12 | Office doc preview                   | S      | —          |
 | 13 | Public "shelf" galleries             | M      | 2          |
-| 14 | EXIF panel for images                | S      | 1          |
+| 14 | EXIF panel for images                | S      | 1          | ✅ shipped (see §0.5) |
 | 15 | Connection snippet panel             | S      | —          | ✅ shipped (see §0.5) |
 | 16 | Paste / URL upload                   | S      | —          |
 | 17 | Activity log                         | S      | —          |

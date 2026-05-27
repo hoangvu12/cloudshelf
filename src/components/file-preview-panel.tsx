@@ -34,6 +34,7 @@ import {
   usePutObjectTags,
   useUpdateObjectMetadata,
 } from "@/lib/api/object-info";
+import { useImageExif, type ImageExif } from "@/lib/api/exif";
 import { usePreviewStore } from "@/stores/preview";
 import { useShareStore } from "@/stores/share";
 import { useCopied } from "@/lib/use-copied";
@@ -314,6 +315,13 @@ function PreviewBody({
         {entry?.etag && <Row label="ETag" value={entry.etag} />}
         {entry?.storageClass && <Row label="Storage" value={entry.storageClass} />}
       </dl>
+
+      <ExifSection
+        connectionId={connectionId}
+        bucket={bucket}
+        objectKey={objectKey}
+        contentType={head.data?.contentType}
+      />
 
       <MetadataSection
         connectionId={connectionId}
@@ -674,6 +682,112 @@ function TagsSection({
         </div>
       </SectionBody>
     </>
+  );
+}
+
+// ─── EXIF section ──────────────────────────────────────────────────────────
+// Image-only. We gate the *fetch* on the HEAD-reported content type (so HEIC
+// and other "image but not browser-previewable" types still get parsed) but
+// only mount the header once we've actually seen non-empty EXIF data — an
+// image without EXIF (e.g. a PNG or a stripped JPG) renders nothing rather
+// than a vacant section. usePreviewUrl is the same hook PreviewMedia uses, so
+// the presign is shared from cache, not re-minted.
+
+function ExifSection({
+  connectionId,
+  bucket,
+  objectKey,
+  contentType,
+}: {
+  connectionId: string;
+  bucket: string;
+  objectKey: string;
+  contentType: string | undefined;
+}) {
+  const isImage = !!contentType && contentType.startsWith("image/");
+  const urlQuery = usePreviewUrl(
+    isImage ? connectionId : null,
+    isImage ? bucket : null,
+    isImage ? objectKey : null
+  );
+  const exif = useImageExif(isImage ? urlQuery.data?.url : undefined);
+
+  if (!isImage) return null;
+  // Hide silently for images with no EXIF, for fetch/parse errors, and while
+  // we don't yet have a URL — the panel's preview chrome already surfaces any
+  // real load problem and an empty section would just add noise.
+  if (exif.isPending || exif.error || !exif.data) return null;
+
+  const rows = exifRows(exif.data);
+  if (rows.length === 0) return null;
+
+  return (
+    <>
+      <SectionHeader title="EXIF" />
+      <dl className="divide-border divide-y font-mono text-[11px]">
+        {rows.map((r) => (
+          <Row key={r.label} label={r.label} value={r.value} />
+        ))}
+      </dl>
+    </>
+  );
+}
+
+function exifRows(data: ImageExif): { label: string; value: React.ReactNode }[] {
+  const rows: { label: string; value: React.ReactNode }[] = [];
+  const camera = [data.Make, data.Model].filter(Boolean).join(" ").trim();
+  if (camera) rows.push({ label: "Camera", value: camera });
+  if (data.LensModel) rows.push({ label: "Lens", value: data.LensModel });
+  if (data.DateTimeOriginal) {
+    // exifr decodes EXIF DateTime fields to native Dates; the rest of the
+    // panel works in ISO strings so we re-stringify before formatting.
+    rows.push({
+      label: "Shot at",
+      value: formatFileTime(data.DateTimeOriginal.toISOString()),
+    });
+  }
+  const dims = pickDimensions(data);
+  if (dims) rows.push({ label: "Dimensions", value: dims });
+  if (typeof data.ISO === "number") rows.push({ label: "ISO", value: String(data.ISO) });
+  if (typeof data.ExposureTime === "number") {
+    rows.push({ label: "Shutter", value: formatShutter(data.ExposureTime) });
+  }
+  if (typeof data.FNumber === "number") {
+    rows.push({ label: "Aperture", value: `f/${data.FNumber.toFixed(1)}` });
+  }
+  if (typeof data.FocalLength === "number") {
+    rows.push({ label: "Focal", value: `${Math.round(data.FocalLength)}mm` });
+  }
+  if (typeof data.latitude === "number" && typeof data.longitude === "number") {
+    rows.push({ label: "GPS", value: <GpsLink lat={data.latitude} lng={data.longitude} /> });
+  }
+  return rows;
+}
+
+function pickDimensions(data: ImageExif): string | null {
+  const w = data.ExifImageWidth ?? data.ImageWidth ?? data.PixelXDimension;
+  const h = data.ExifImageHeight ?? data.ImageHeight ?? data.PixelYDimension;
+  if (typeof w !== "number" || typeof h !== "number") return null;
+  return `${w} × ${h}`;
+}
+
+function formatShutter(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds <= 0) return `${seconds}s`;
+  if (seconds >= 1) return `${seconds % 1 === 0 ? seconds : seconds.toFixed(1)}s`;
+  return `1/${Math.round(1 / seconds)}s`;
+}
+
+function GpsLink({ lat, lng }: { lat: number; lng: number }) {
+  const href = `https://www.google.com/maps?q=${lat},${lng}`;
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-accent-blue underline-offset-2 hover:underline"
+    >
+      {lat.toFixed(5)}, {lng.toFixed(5)}
+    </a>
   );
 }
 
@@ -1163,7 +1277,7 @@ function tokenStyle(t: ThemedToken): React.CSSProperties {
   };
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex items-start gap-3 px-4 py-2.5">
       <dt className="text-muted-foreground w-20 shrink-0 text-[10px] tracking-wider uppercase">

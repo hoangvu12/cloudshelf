@@ -30,6 +30,7 @@
     "client-zip": "^2.5.0",
     "clsx": "^2.1.1",
     "cmdk": "^1.0.4",
+    "exifr": "^7.1.3",
     "hono": "^4.12.23",
     "idb-keyval": "^6.2.1",
     "lucide-react": "^0.469.0",
