@@ -635,10 +635,15 @@ function SettingToggleRow({
   onChange: (next: boolean) => void;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4">
-      <div className="w-48 shrink-0">
+    <div className="flex items-center justify-between gap-6">
+      {/* Text fills available width so long descriptions don't get squeezed
+          into a narrow column. Toggle stays compact on the right, vertically
+          centered against the whole label+description block. */}
+      <div className="min-w-0 flex-1">
         <div className="text-foreground text-sm font-medium">{label}</div>
-        <div className="text-muted-foreground mt-1 text-xs">{description}</div>
+        <div className="text-muted-foreground mt-1 max-w-prose text-xs">
+          {description}
+        </div>
       </div>
       <button
         type="button"
