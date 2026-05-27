@@ -148,3 +148,26 @@ export interface ObjectVersion {
   lastModified: string;
   storageClass?: string;
 }
+
+/**
+ * One audit-log row from the `activity` table. `detail` is whatever JSON the
+ * write route stashed — shape is per-`kind` so the client renders defensively.
+ * Most rows surface a bucket and a key; a few (bucket-create, versioning-set)
+ * leave `key` null because the action operates on the bucket itself.
+ */
+export interface ActivityEntry {
+  id: number;
+  ts: string;
+  kind: string;
+  connectionId: string | null;
+  bucket: string | null;
+  key: string | null;
+  detail: unknown | null;
+}
+
+export interface ActivityPage {
+  rows: ActivityEntry[];
+  total: number;
+  limit: number;
+  offset: number;
+}

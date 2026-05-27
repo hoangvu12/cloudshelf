@@ -36,6 +36,18 @@ export function getDb(): Database {
       value TEXT NOT NULL
     );
   `);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS activity (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ts TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      connection_id TEXT,
+      bucket TEXT,
+      key TEXT,
+      detail TEXT
+    );
+  `);
+  db.exec(`CREATE INDEX IF NOT EXISTS activity_ts ON activity (ts DESC);`);
 
   return db;
 }
@@ -164,4 +176,125 @@ export function deleteConnection(id: string): boolean {
     .query("DELETE FROM connections WHERE id = ?")
     .run(id);
   return result.changes > 0;
+}
+
+// ─── Activity log ───────────────────────────────────────────────────────────
+// Single-user audit trail of write actions. The log is intentionally
+// best-effort: a failed insert is swallowed so a transient SQLite lock can
+// never break the user's actual mutation (the upstream S3 call already
+// succeeded by the time we write here). Trim is bounded by a startup call to
+// `trimActivity` — single-user volumes don't warrant a cron.
+
+export interface ActivityRow {
+  id: number;
+  ts: string;
+  kind: string;
+  connectionId: string | null;
+  bucket: string | null;
+  key: string | null;
+  /** Decoded JSON payload (the wire column is a `TEXT` JSON blob). */
+  detail: unknown | null;
+}
+
+interface ActivityRowRaw {
+  id: number;
+  ts: string;
+  kind: string;
+  connection_id: string | null;
+  bucket: string | null;
+  key: string | null;
+  detail: string | null;
+}
+
+function rowToActivity(row: ActivityRowRaw): ActivityRow {
+  let parsed: unknown | null = null;
+  if (row.detail) {
+    try {
+      parsed = JSON.parse(row.detail);
+    } catch {
+      parsed = row.detail;
+    }
+  }
+  return {
+    id: row.id,
+    ts: row.ts,
+    kind: row.kind,
+    connectionId: row.connection_id,
+    bucket: row.bucket,
+    key: row.key,
+    detail: parsed,
+  };
+}
+
+export interface LogActivityInput {
+  kind: string;
+  connectionId?: string | null;
+  bucket?: string | null;
+  key?: string | null;
+  detail?: unknown;
+}
+
+export function logActivity(input: LogActivityInput): void {
+  try {
+    const ts = new Date().toISOString();
+    const detailJson =
+      input.detail === undefined || input.detail === null
+        ? null
+        : JSON.stringify(input.detail);
+    getDb()
+      .query(
+        `INSERT INTO activity (ts, kind, connection_id, bucket, key, detail)
+         VALUES (?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        ts,
+        input.kind,
+        input.connectionId ?? null,
+        input.bucket ?? null,
+        input.key ?? null,
+        detailJson
+      );
+  } catch (err) {
+    // Don't let a logging failure break the user's action. Best-effort only.
+    console.warn("[activity] failed to log row", err);
+  }
+}
+
+export function listActivity(
+  limit: number,
+  offset: number
+): { rows: ActivityRow[]; total: number } {
+  const db = getDb();
+  const rows = db
+    .query(
+      "SELECT * FROM activity ORDER BY id DESC LIMIT ? OFFSET ?"
+    )
+    .all(limit, offset) as ActivityRowRaw[];
+  const totalRow = db
+    .query("SELECT COUNT(*) AS n FROM activity")
+    .get() as { n: number } | null;
+  return {
+    rows: rows.map(rowToActivity),
+    total: totalRow?.n ?? 0,
+  };
+}
+
+export function clearActivity(): number {
+  const result = getDb().query("DELETE FROM activity").run();
+  return result.changes;
+}
+
+/**
+ * Cap the activity table at `keep` rows. Called once at server boot — single-
+ * user volumes are low enough that we don't need a cron, and "fresh start, fresh
+ * cap" is what the spec calls for.
+ */
+export function trimActivity(keep = 10_000): number {
+  const result = getDb()
+    .query(
+      `DELETE FROM activity
+       WHERE id NOT IN (SELECT id FROM activity ORDER BY id DESC LIMIT ?)`
+    )
+    .run(keep);
+  return result.changes;
 }

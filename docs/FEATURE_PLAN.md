@@ -951,11 +951,188 @@ pattern into its own helper at that time.
 
 None — Phase 16 is a leaf.
 
-### Eligibility snapshot (as of Phase 16 ship)
+### Phase 17 — shipped ✅ (commit `feat(activity): SQLite audit trail + Settings tab`)
+
+Shipped close to spec. The log lives in the same `bun:sqlite` database the
+connections table already uses (`./data/cloudshelf.db`), surfaces via a new
+`/api/activity` route pair, and renders inside the existing `settings.tsx`
+under a new "Activity" tab.
+
+**Server / DB:**
+
+- `server/db.ts` — new `activity` table created next to `connections` and
+  `meta` in `getDb()`. Schema matches the §0.5 spec exactly:
+  `id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, kind TEXT NOT NULL,
+  connection_id TEXT, bucket TEXT, key TEXT, detail TEXT`, plus the
+  `activity_ts (ts DESC)` index. `detail` rides as a JSON blob.
+- Helpers exported next to the existing connection helpers (per the
+  "match the style" hint): `logActivity({ kind, connectionId, bucket, key,
+  detail })`, `listActivity(limit, offset)`, `clearActivity()`,
+  `trimActivity(keep = 10_000)`. `logActivity` wraps its insert in a
+  `try/catch` and just `console.warn`s on failure — a transient SQLite lock
+  should never break the user's actual mutation (the upstream S3 call
+  succeeded by the time we get here).
+- `server/index.ts` — calls `trimActivity(10_000)` once at boot, before the
+  Hono app is constructed. Single-user volumes are low enough that a cron
+  is overkill — the spec called this out explicitly.
+
+**Routes (`server/routes/activity.ts`):**
+
+- `GET /api/activity?limit=50&offset=0` — newest-first listing with a Zod-
+  coerced `limit` clamped to `1..200` and `offset` `>=0`. Returns
+  `{ rows, total, limit, offset }` so the client can show "1234 entries"
+  without a second round-trip.
+- `DELETE /api/activity` — clears the table; returns `{ ok: true, removed }`.
+- Both routes live behind the existing `requireSession` gate at the
+  `/api/*` boundary in `server/index.ts`.
+
+**Mutating-route logging (`server/routes/connections.ts`):**
+
+Logged after the successful upstream response, before `c.json(...)`:
+
+| Route | `kind` | Notes |
+|-------|--------|-------|
+| POST `/buckets` | `bucket-create` | |
+| POST `/folders` | `folder-create` | |
+| POST `/objects/delete` (1 key) | `delete` | |
+| POST `/objects/delete` (N keys) | `delete-bulk` | `detail.count`, `detail.sample` (first 5) |
+| POST `/objects/copy` (same parent prefix) | `rename` | |
+| POST `/objects/copy` (different prefix) | `copy` | |
+| POST `/objects/multipart/complete` | `upload` | `detail.transport: "multipart"` |
+| DELETE `/objects/multipart` | `upload-abort` | |
+| POST `/objects/presign/upload` | `presign-upload` | `detail.transport: "single"` — see deviation |
+| POST `/objects/from-url` | `upload-from-url` | `detail.sourceUrl` |
+| PUT `/objects/tags` | `tags-update` | |
+| PUT `/objects/metadata` | `metadata-update` | |
+| PUT `/versioning` | `versioning-set` | `detail.status` |
+| POST `/objects/versions/restore` | `version-restore` | `detail.versionId` |
+| DELETE `/objects/versions` | `version-delete` | `detail.versionId` |
+
+**Explicitly NOT logged**, with rationale:
+
+- `GET /objects/download-url` (single + share-dialog TTL'd). The hint flagged
+  this as ambiguous; I went with the "keep signal-to-noise high" reading.
+  Every preview pane open mints one of these — logging them would drown out
+  every other action. Users who care about share-link audit will get it from
+  Phase 18 (protected share links), which is purpose-built for it.
+- `POST /objects/multipart/start` and the per-part presign endpoint. Starts
+  may be aborted, parts are noise. The authoritative "upload happened" row
+  rides on `multipart/complete`.
+- All reads (HEAD, list, list-versions, get-tags, get-versioning,
+  list-multipart-parts, `/connections` CRUD). The log is for write actions
+  on S3 state — managing connection profiles isn't an S3 action and
+  cluttering the log with profile edits would erode the audit signal.
+
+**Single-presign-upload ambiguity — how I resolved it:**
+
+Single-PUT uploads (files under the multipart threshold, ~5 MB) stream
+browser → S3 directly via the presigned URL minted by the server; the server
+never sees the upstream completion. I considered four options:
+
+1. Log nothing. Loses the most common upload path entirely.
+2. Add a "completion ping" route the browser hits after the PUT. New
+   moving part, easy to forget to call, and a ping that lies (the user
+   could spoof it) is worse than no signal.
+3. Server-side HEAD probe after presign. Adds latency to the hot path,
+   and presigns are valid for 15 min so any HEAD here is best-effort anyway.
+4. Log `presign-upload` at presign-mint time. The user clicked Upload, we
+   committed to it. Honest about what we know — that we *handed out the URL*,
+   not that the PUT succeeded.
+
+Picked **(4)**, with the `kind` deliberately distinct from `upload` so the
+activity view can show "Started upload" (info tone) vs. "Uploaded file"
+(success tone). `detail.transport: "single"` vs. `"multipart"` lets future
+code distinguish the two; today the verb mapping in `describeKind` is the
+only consumer.
+
+**Client (`src/lib/api/activity.ts`):**
+
+- Per-resource convention #6: `activityKeys.all` + `activityKeys.list(limit)`
+  factories, `useActivity(limit = 50)` infinite query, `useClearActivity()`
+  mutation with the convention #5 `(...args)` spread on `onSuccess`. The
+  mutation invalidates only `activityKeys.all` — activity rows don't
+  surface anywhere else in the UI, so there's no `objectKeys` etc. to
+  invalidate.
+- `useInfiniteQuery`'s `getNextPageParam` reads `(offset + rows.length)
+  >= total` to terminate. `pageParam: 0` initially.
+
+**Client (`src/routes/settings.tsx`):**
+
+- New `"activity"` member added to the `Section` union and `NAV_ITEMS` (Clock
+  icon, between Profiles and Keyboard).
+- `ActivitySection` renders header (title, "X entries" pill, Clear log
+  button with `window.confirm`) over a virtualized list using
+  `@tanstack/react-virtual` (already a dep — copied the pattern from
+  `object-list.tsx`; the same library powers the file-preview text view).
+  Row height is fixed at 64 px (`ACTIVITY_ROW_HEIGHT`), `overscan: 8`,
+  `getItemKey: (i) => rows[i]?.id`. Infinite-scroll triggers via the same
+  "last visible row is the sentinel" check the object list uses — no extra
+  IntersectionObserver.
+- `ActivityRow` shows: kind chip (color-coded via `ACTIVITY_TONE`), human
+  verb ("Deleted file", "Uploaded file", …), `bucket/key` scope, an inline
+  TanStack Router `<Link to="/buckets/$bucketName/$">` to the *parent
+  prefix* of the affected key (the file itself may no longer exist on a
+  delete/rename, but the prefix usually does), and a relative timestamp
+  ("just now", "12m ago", "3h ago") that falls through to `toLocaleString`
+  past 24 h.
+- "Clear log" button uses `window.confirm` (mirrors the existing "Reset
+  local preferences" in About and the per-profile delete in Profiles —
+  there's no project-wide confirm dialog primitive yet, and a one-off
+  modal for this would be excess weight).
+
+**Deviations from spec:**
+
+- Spec said "log on `/multipart/complete` only" + "log a `presign-upload`
+  row at presign-mint time as the best signal we have". I did **both**, with
+  the kinds deliberately distinct so the UI can render them differently.
+  See the "Single-presign-upload ambiguity" subsection above for the
+  reasoning.
+- Spec floated the bucket-delete route as a possible log site. There isn't
+  one in the codebase (no Phase has shipped a bucket-delete endpoint yet),
+  so it's a no-op — when Phase 8 or a future bucket-management phase adds
+  one, drop a `logActivity({ kind: "bucket-delete", ... })` next to its
+  upstream call.
+- Spec mentioned a "rename-prefix" route. That'll come with Phase 6
+  (cross-bucket copy/move + folder rename). Today the only rename surface
+  is the same-prefix copy + delete pair via `/objects/copy` and
+  `/objects/delete`, which already produce a `rename` + `delete` pair in
+  the log — distinguishable from a real copy by the matching parent
+  prefix logic in the copy-route handler.
+- Spec said "link to the bucket/prefix where it happened". I link the
+  *parent prefix* of the affected key (e.g. a delete of
+  `photos/2025/IMG.jpg` links to `photos/2025/`) rather than the key
+  itself, because the key often no longer exists (deleted, renamed,
+  version-pruned). Bucket-only rows (bucket-create, versioning-set) link
+  to the bucket root.
+- The "Clear log" UI uses `window.confirm`, not a radix Dialog. The
+  project has no shared confirm-dialog primitive (existing destructive
+  flows like "Reset local preferences" and profile-delete both use
+  `window.confirm` too), so this matches the prevailing style. If a
+  confirm dialog primitive lands later, swap it in here.
+
+### Conventions earned in Phase 17 — reuse in later phases
+
+None new. Phase 17 is a clean application of:
+
+- **#5** (mutation `onSuccess` `(...args)` spread — `useClearActivity`).
+- **#6** (per-resource API file `src/lib/api/activity.ts`).
+- The server-side `logActivity` helper is the natural call site for any
+  future write route. Phase 6 (cross-bucket copy/move + folder rename),
+  Phase 7 (lifecycle rules editor), Phase 8 (CORS/policy), Phase 10
+  (object lock), Phase 11 (in-browser text editor save), and Phase 18
+  (protected share links create/revoke) should all `logActivity` after
+  their upstream success calls. Use one of the existing `kind` strings
+  when the action is conceptually identical (e.g. rename-prefix should
+  still log `rename`); coin a new one when the action is novel.
+
+### Phases unblocked by Phase 17
+
+None directly — the log is a leaf consumer of the existing write routes.
+
+### Eligibility snapshot (as of Phase 17 ship)
 
 Pickable now, in rough recommend-first order:
 
-- **17** Activity log (S, no deps)
 - **20** Range-GET video player polish (S, no deps)
 - **10** Object Lock / retention / legal hold (M, unblocked by Phase 5)
 - **2-blocked**: 13 (shelves), 18 (protected share links) — eligible.
@@ -983,7 +1160,7 @@ Pickable now, in rough recommend-first order:
 | 14 | EXIF panel for images                | S      | 1          | ✅ shipped (see §0.5) |
 | 15 | Connection snippet panel             | S      | —          | ✅ shipped (see §0.5) |
 | 16 | Paste / URL upload                   | S      | —          | ✅ shipped (see §0.5) |
-| 17 | Activity log                         | S      | —          |
+| 17 | Activity log                         | S      | —          | ✅ shipped (see §0.5) |
 | 18 | Password-protected share links       | M      | 2          |
 | 19 | ZIP-in-place browsing                | L      | —          |
 | 20 | Range-GET video player polish        | S      | —          |

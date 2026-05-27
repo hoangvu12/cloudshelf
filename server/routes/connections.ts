@@ -6,6 +6,7 @@ import {
   insertConnection,
   updateConnection,
   deleteConnection,
+  logActivity,
 } from "../db.ts";
 import {
   abortMultipartUpload,
@@ -149,6 +150,11 @@ connectionsRoute.post("/:id/buckets", async (c) => {
   }
   try {
     const result = await createBucketForConnection(conn, parsed.data.name);
+    logActivity({
+      kind: "bucket-create",
+      connectionId: conn.id,
+      bucket: parsed.data.name,
+    });
     return c.json(result, 201);
   } catch (err) {
     return c.json(upstreamError(err), 502);
@@ -209,6 +215,12 @@ connectionsRoute.post("/:id/buckets/:bucket/folders", async (c) => {
       c.req.param("bucket"),
       parsed.data.prefix
     );
+    logActivity({
+      kind: "folder-create",
+      connectionId: conn.id,
+      bucket: c.req.param("bucket"),
+      key: parsed.data.prefix,
+    });
     return c.json(out, 201);
   } catch (err) {
     return c.json(upstreamError(err), 502);
@@ -230,6 +242,31 @@ connectionsRoute.post("/:id/buckets/:bucket/objects/delete", async (c) => {
       c.req.param("bucket"),
       parsed.data.keys
     );
+    // Per-key row when it's a single delete, otherwise one summary row — the
+    // log is meant to be scannable, and 500-row bulk deletes shouldn't drown
+    // out individual actions.
+    if (parsed.data.keys.length === 1) {
+      logActivity({
+        kind: "delete",
+        connectionId: conn.id,
+        bucket: c.req.param("bucket"),
+        key: parsed.data.keys[0]!,
+        detail: { deleted: result.deleted, errors: result.errors.length },
+      });
+    } else {
+      logActivity({
+        kind: "delete-bulk",
+        connectionId: conn.id,
+        bucket: c.req.param("bucket"),
+        key: parsed.data.keys[0] ?? null,
+        detail: {
+          count: parsed.data.keys.length,
+          deleted: result.deleted,
+          errors: result.errors.length,
+          sample: parsed.data.keys.slice(0, 5),
+        },
+      });
+    }
     return c.json(result);
   } catch (err) {
     return c.json(upstreamError(err), 502);
@@ -252,6 +289,19 @@ connectionsRoute.post("/:id/buckets/:bucket/objects/copy", async (c) => {
       parsed.data.sourceKey,
       parsed.data.destKey
     );
+    // The client uses the same copy endpoint for rename (same parent prefix,
+    // different basename) and cross-prefix move. Distinguish them in the log so
+    // the activity view can show clearer verbs ("Renamed", "Moved").
+    const sourcePrefix = parsed.data.sourceKey.replace(/[^/]+\/?$/, "");
+    const destPrefix = parsed.data.destKey.replace(/[^/]+\/?$/, "");
+    const kind = sourcePrefix === destPrefix ? "rename" : "copy";
+    logActivity({
+      kind,
+      connectionId: conn.id,
+      bucket: c.req.param("bucket"),
+      key: parsed.data.destKey,
+      detail: { sourceKey: parsed.data.sourceKey, destKey: parsed.data.destKey },
+    });
     return c.json({ ok: true });
   } catch (err) {
     return c.json(upstreamError(err), 502);
@@ -361,6 +411,8 @@ connectionsRoute.post(
         parsed.data.contentType,
         scParsed.data
       );
+      // Don't log the start — it's noisy and may be aborted. The
+      // multipart/complete handler logs the authoritative "upload happened" row.
       return c.json({ uploadId: out.uploadId, key: parsed.data.key });
     } catch (err) {
       return c.json(upstreamError(err), 502);
@@ -461,6 +513,13 @@ connectionsRoute.post(
         uploadId,
         parsed.data.parts
       );
+      logActivity({
+        kind: "upload",
+        connectionId: conn.id,
+        bucket: c.req.param("bucket"),
+        key,
+        detail: { transport: "multipart", parts: parsed.data.parts.length },
+      });
       return c.json({ ok: true, key, etag: out.etag, location: out.location });
     } catch (err) {
       return c.json(upstreamError(err), 502);
@@ -485,6 +544,15 @@ connectionsRoute.delete(
         key,
         uploadId
       );
+      // Aborts are rare enough to be interesting (the user cancelled mid-flight,
+      // or the browser crashed and a resume cleanup fired) but not so noisy that
+      // they'd drown out real uploads.
+      logActivity({
+        kind: "upload-abort",
+        connectionId: conn.id,
+        bucket: c.req.param("bucket"),
+        key,
+      });
       return c.json({ ok: true });
     } catch (err) {
       return c.json(upstreamError(err), 502);
@@ -520,6 +588,18 @@ connectionsRoute.post(
         undefined,
         scParsed.data
       );
+      // Single-PUT uploads stream browser → S3 directly via the presigned URL;
+      // we never see the upstream completion. Logging at presign-mint time is
+      // the best signal we have. The companion "upload" row (with `transport:
+      // 'multipart'`) is logged on multipart/complete and is authoritative —
+      // this row stays distinct so users can tell the two flows apart.
+      logActivity({
+        kind: "presign-upload",
+        connectionId: conn.id,
+        bucket: c.req.param("bucket"),
+        key,
+        detail: { transport: "single" },
+      });
       return c.json(out);
     } catch (err) {
       return c.json(upstreamError(err), 502);
@@ -638,6 +718,17 @@ connectionsRoute.post(
         Number.isFinite(contentLength) ? contentLength : undefined,
         FROM_URL_SIZE_CAP_BYTES
       );
+      logActivity({
+        kind: "upload-from-url",
+        connectionId: conn.id,
+        bucket: c.req.param("bucket"),
+        key: parsed.data.key,
+        detail: {
+          sourceUrl: parsed.data.url,
+          contentType,
+          contentLength: Number.isFinite(contentLength) ? contentLength : undefined,
+        },
+      });
       return c.json({ ok: true, key: parsed.data.key, contentType });
     } catch (err) {
       if (err instanceof StreamSizeExceededError) {
@@ -737,6 +828,13 @@ connectionsRoute.put("/:id/buckets/:bucket/objects/tags", async (c) => {
       parsed.data.tags,
       versionId
     );
+    logActivity({
+      kind: "tags-update",
+      connectionId: conn.id,
+      bucket: c.req.param("bucket"),
+      key,
+      detail: { count: parsed.data.tags.length, versionId },
+    });
     return c.json({ ok: true });
   } catch (err) {
     return c.json(upstreamError(err), 502);
@@ -772,6 +870,16 @@ connectionsRoute.put("/:id/buckets/:bucket/objects/metadata", async (c) => {
       normalized,
       parsed.data.contentType
     );
+    logActivity({
+      kind: "metadata-update",
+      connectionId: conn.id,
+      bucket: c.req.param("bucket"),
+      key,
+      detail: {
+        contentType: parsed.data.contentType,
+        userMetadataKeys: Object.keys(normalized),
+      },
+    });
     return c.json({ ok: true });
   } catch (err) {
     return c.json(upstreamError(err), 502);
@@ -819,6 +927,12 @@ connectionsRoute.put("/:id/buckets/:bucket/versioning", async (c) => {
       c.req.param("bucket"),
       parsed.data.status
     );
+    logActivity({
+      kind: "versioning-set",
+      connectionId: conn.id,
+      bucket: c.req.param("bucket"),
+      detail: { status: parsed.data.status },
+    });
     return c.json({ ok: true });
   } catch (err) {
     return c.json(upstreamError(err), 502);
@@ -873,6 +987,13 @@ connectionsRoute.post(
         parsed.data.key,
         parsed.data.versionId
       );
+      logActivity({
+        kind: "version-restore",
+        connectionId: conn.id,
+        bucket: c.req.param("bucket"),
+        key: parsed.data.key,
+        detail: { versionId: parsed.data.versionId },
+      });
       return c.json({ ok: true });
     } catch (err) {
       return c.json(upstreamError(err), 502);
@@ -902,6 +1023,13 @@ connectionsRoute.delete(
         key,
         versionId
       );
+      logActivity({
+        kind: "version-delete",
+        connectionId: conn.id,
+        bucket: c.req.param("bucket"),
+        key,
+        detail: { versionId },
+      });
       return c.json({ ok: true });
     } catch (err) {
       return c.json(upstreamError(err), 502);

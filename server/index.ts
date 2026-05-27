@@ -25,8 +25,9 @@ import { logger } from "hono/logger";
 import { serveStatic } from "hono/bun";
 import { connectionsRoute } from "./routes/connections.ts";
 import { authRoute } from "./routes/auth.ts";
+import { activityRoute } from "./routes/activity.ts";
 import { requireSession } from "./lib/auth.ts";
-import { getDb } from "./db.ts";
+import { getDb, trimActivity } from "./db.ts";
 
 const PORT = Number(process.env.PORT ?? 3001);
 const IS_PROD = process.env.NODE_ENV === "production";
@@ -41,6 +42,16 @@ if (!process.env.CLOUDSHELF_USERNAME || !process.env.CLOUDSHELF_PASSWORD) {
 
 getDb();
 
+// Cap the activity table on each boot. Single-user volumes are low enough that
+// running this once at startup (rather than via cron) is plenty — even a heavy
+// week tops out well under the 10k row cap.
+{
+  const removed = trimActivity(10_000);
+  if (removed > 0) {
+    console.log(`[activity] trimmed ${removed} old rows on startup`);
+  }
+}
+
 const app = new Hono();
 
 app.use("*", logger());
@@ -54,6 +65,7 @@ app.route("/api/auth", authRoute);
 app.use("/api/*", requireSession);
 
 app.route("/api/connections", connectionsRoute);
+app.route("/api/activity", activityRoute);
 
 app.onError((err, c) => {
   console.error(err);
