@@ -731,11 +731,110 @@ another component next to `<VersioningToggle>`.
 10 (Object Lock / retention / legal hold) — was the only phase explicitly
 blocked on Phase 5 per the §1 dependency column.
 
-### Eligibility snapshot (as of Phase 5 ship)
+### Phase 9 — shipped ✅ (commit `feat(uploads): storage class on upload`)
+
+Shipped close to spec. The picker pre-bakes `x-amz-storage-class` into the
+presigned URL / `CreateMultipartUpload` rather than asking Uppy to send a
+required header — cleaner client side, no `requiredHeaders` plumbing.
+
+**Server / API:**
+
+- `server/lib/s3.ts` — `presignSingleUpload` and `createMultipartUpload`
+  each grew an optional `storageClass?: string` parameter. Both pass it
+  straight onto the underlying `PutObjectCommand` / `CreateMultipartUploadCommand`.
+  The SDK types `StorageClass` as a string-literal union; we accept any
+  string at the route boundary and cast through (`as StorageClass | undefined`)
+  with a comment so the next reader knows the wire union is broader than
+  the SDK's literal set.
+- `server/routes/connections.ts` — both `POST /objects/presign/upload` and
+  `POST /objects/multipart/start` now read `?storageClass=` off the query
+  string. Validated via a shared `storageClassSchema = z.string().trim().min(1).optional()`
+  (free-form rather than a hard enum) so S3-compatible backends that ship
+  their own classes (telegram-s3, R2, B2 …) aren't rejected at the API
+  layer. The canonical AWS set is restricted on the client side (see UI).
+  Backends that don't recognize the chosen class typically fall back to
+  STANDARD silently — the upload still succeeds, satisfying Phase 9's
+  graceful no-op requirement without any 502 handling.
+
+**Client:**
+
+- `src/stores/prefs.ts` — added `defaultStorageClass: string | undefined`
+  plus a dedicated `setDefaultStorageClass` setter alongside the existing
+  `setViewMode` / `setDensity`. Persisted via `cloudshelf.prefs`. Default
+  is `undefined` — meaning "let the backend pick", which round-trips as
+  no `?storageClass=` query param.
+- `src/stores/upload-session.ts` (new) — non-persisted `useUploadSessionStore`
+  with `{ storageClass, setStorageClass }`. Carries the session-level
+  override surfaced by the upload-panel toolbar so changing the active
+  class doesn't rewrite the persistent default (the spec called for "per
+  upload session" override semantics distinct from the pref).
+- `src/stores/uploads.ts` — `addFiles` resolves the effective class once
+  at queue time: `session ?? prefs.defaultStorageClass ?? undefined`. The
+  resolved value is stamped onto each `UploadItem`'s meta so mid-session
+  changes don't perturb in-flight files (same lock-in pattern as
+  `compressImages`).
+- `src/lib/uppy.ts` — `UploadMeta` gained an optional `storageClass`. Both
+  the single-PUT `getUploadParameters` and `createMultipartUpload`
+  callbacks read it off meta and append `?storageClass=` to the relevant
+  POST. For the multipart-start route, `URLSearchParams` would
+  double-encode the URL-already-encoded bucket; using `new URL(...,
+  window.location.origin)` + `searchParams.set()` composes the final
+  query string cleanly without touching the existing path encoding.
+- `src/components/upload-panel.tsx` — new thin `<Toolbar />` row under the
+  Header hosts `<StorageClassPicker />`, a DropdownMenu trigger with
+  Database glyph + "STORAGE: <class>" label. Menu lists the eight
+  canonical AWS classes (STANDARD, STANDARD_IA, INTELLIGENT_TIERING,
+  ONEZONE_IA, GLACIER_IR, GLACIER, DEEP_ARCHIVE, REDUCED_REDUNDANCY) with
+  one-line hints, plus a "Default" sentinel at the top that clears the
+  session override. Selecting an item writes through to
+  `useUploadSessionStore.setStorageClass` only — the persisted pref isn't
+  touched (spec called this out explicitly).
+
+**Object info panel surfaces actual storage class:** Phase 1 already shipped
+the "Storage" row in `<DetailsSection>` from `entry?.storageClass` (the value
+listing returns for the object). Verified visually — uploading with
+`StorageClass: GLACIER` makes the next listing return `GLACIER` in the row,
+satisfying the spec acceptance criterion.
+
+**Deviations from spec:**
+
+- **Free-form `z.string().optional()` on the route** instead of a hard enum
+  of S3's canonical eight. The spec explicitly allowed either; the
+  free-form choice keeps non-AWS backends with custom classes (e.g.
+  `EXPRESS_ONEZONE` lookalikes, R2's bucket-default semantics) working
+  without future schema churn. The picker UI still restricts user input to
+  the canonical set so the typical user can't accidentally invent a
+  string, but a power user hitting the API directly isn't gated.
+- **Toolbar is its own row, not inline in Header.** The Header is already
+  five elements wide on a `h-12`; squeezing the dropdown in there
+  compresses the status-summary pills. A dedicated `h-9 bg-card/60` row
+  reads as a "session controls" tray and leaves the door open for a
+  Phase 16 paste-target dropdown next to it without a layout rewrite.
+- **Pref + session override are two stores, not one.** Spec said "New
+  Zustand pref … with setter" + "dropdown overrides the default per upload
+  session." Two stores is the simplest faithful reading: the persisted
+  pref keeps cross-tab agreement, the session store keeps the current
+  tab's override out of localStorage. `addFiles` resolves both with a
+  fall-through.
+
+### Conventions earned in Phase 9 — reuse in later phases
+
+None promoted to numbered conventions — Phase 9 is small and entirely
+covered by the existing set (#4 apiFetch / URL building, #5 mutation
+onSuccess spread is N/A no mutations, etc.). The "session-only zustand
+store next to a persisted pref" pattern in `upload-session.ts` is reusable
+for any future per-session upload knob (Phase 16 paste-from-URL target,
+hypothetical future "session encryption mode"), but waits for a second
+caller before being lifted to a shared helper.
+
+### Phases unblocked by Phase 9
+
+None directly — Phase 9 was a no-deps leaf.
+
+### Eligibility snapshot (as of Phase 9 ship)
 
 Pickable now, in rough recommend-first order:
 
-- **9** Storage class on upload (S, no deps)
 - **16** Paste / URL upload (S, no deps — reuse Phase-3 `UploadInputFile`)
 - **17** Activity log (S, no deps)
 - **20** Range-GET video player polish (S, no deps)
@@ -757,7 +856,7 @@ Pickable now, in rough recommend-first order:
 | 6 | Cross-bucket copy/move + folder rename | M    | —          |
 | 7 | Lifecycle rules editor               | M      | —          |
 | 8 | CORS + bucket policy editor          | M      | —          |
-| 9 | Storage class on upload              | S      | —          |
+| 9 | Storage class on upload              | S      | —          | ✅ shipped (see §0.5) |
 | 10 | Object Lock / retention / legal hold | M      | 5          |
 | 11 | In-browser text/code/md editor       | M      | 1          |
 | 12 | Office doc preview                   | S      | —          |

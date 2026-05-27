@@ -13,8 +13,14 @@ interface PrefsState {
   overwriteWarning: boolean;
   resumeOnReload: boolean;
   compressImages: boolean;
+  /** Default S3 storage class for new uploads. `undefined` = let the backend
+   *  pick (STANDARD on AWS, backend-default elsewhere). The upload-panel
+   *  toolbar lets the user override the active session without writing back
+   *  to this pref. */
+  defaultStorageClass: string | undefined;
   setViewMode: (mode: ViewMode) => void;
   setDensity: (d: RowDensity) => void;
+  setDefaultStorageClass: (sc: string | undefined) => void;
   patch: (p: Partial<PrefsState>) => void;
 }
 
@@ -29,8 +35,11 @@ export const usePrefsStore = create<PrefsState>()(
       overwriteWarning: true,
       resumeOnReload: true,
       compressImages: false,
+      defaultStorageClass: undefined,
       setViewMode: (viewMode) => set({ viewMode }),
       setDensity: (density) => set({ density }),
+      setDefaultStorageClass: (defaultStorageClass) =>
+        set({ defaultStorageClass }),
       patch: (p) => set(p),
     }),
     { name: "cloudshelf.prefs" }

@@ -308,6 +308,17 @@ const multipartStartSchema = z.object({
   contentType: z.string().optional(),
 });
 
+/**
+ * Storage class is intentionally validated as a free-form non-empty string
+ * rather than a fixed enum: backends in the S3-compatible ecosystem ship
+ * their own classes (telegram-s3, Cloudflare R2, Backblaze B2 …) that don't
+ * always overlap with AWS's STANDARD/STANDARD_IA/GLACIER/etc set. The
+ * client UI restricts the picker to the canonical AWS values; any backend
+ * that doesn't recognize the chosen class typically stores as STANDARD,
+ * which keeps the upload itself succeeding (Phase 9 acceptance).
+ */
+const storageClassSchema = z.string().trim().min(1).optional();
+
 const multipartCompleteSchema = z.object({
   parts: z
     .array(
@@ -332,12 +343,21 @@ connectionsRoute.post(
         400
       );
     }
+    // ?storageClass= is optional; omitting keeps the historical default
+    // (STANDARD on AWS, backend-default elsewhere).
+    const scParsed = storageClassSchema.safeParse(
+      c.req.query("storageClass") || undefined
+    );
+    if (!scParsed.success) {
+      return c.json({ error: "Invalid storageClass" }, 400);
+    }
     try {
       const out = await createMultipartUpload(
         conn,
         c.req.param("bucket"),
         parsed.data.key,
-        parsed.data.contentType
+        parsed.data.contentType,
+        scParsed.data
       );
       return c.json({ uploadId: out.uploadId, key: parsed.data.key });
     } catch (err) {
@@ -482,8 +502,22 @@ connectionsRoute.post(
     if (!conn) return c.json({ error: "Not found" }, 404);
     const key = c.req.query("key");
     if (!key) return c.json({ error: "Missing ?key=" }, 400);
+    // ?storageClass= is baked into the signed URL via x-amz-storage-class;
+    // the browser PUTs to the URL unchanged so Uppy doesn't need a header.
+    const scParsed = storageClassSchema.safeParse(
+      c.req.query("storageClass") || undefined
+    );
+    if (!scParsed.success) {
+      return c.json({ error: "Invalid storageClass" }, 400);
+    }
     try {
-      const out = await presignSingleUpload(conn, c.req.param("bucket"), key);
+      const out = await presignSingleUpload(
+        conn,
+        c.req.param("bucket"),
+        key,
+        undefined,
+        scParsed.data
+      );
       return c.json(out);
     } catch (err) {
       return c.json(upstreamError(err), 502);

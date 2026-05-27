@@ -47,6 +47,11 @@ export interface UploadMeta {
    *  see which subdirectory a row is from, and read by Uppy's
    *  generateFileID to disambiguate same-name files in different subdirs. */
   relativePath?: string;
+  /** S3 storage class to bake into the presigned URL / multipart create.
+   *  Resolved at queue time (session override → persisted default →
+   *  undefined) and locked in so a mid-session toggle doesn't perturb
+   *  in-flight uploads. Undefined means "let the backend pick". */
+  storageClass?: string;
 }
 
 type AnyMeta = Record<string, unknown>;
@@ -62,6 +67,7 @@ function readMeta(file: UppyFile<AnyMeta, AnyMeta>): UploadMeta {
     key: m.key,
     prefix: m.prefix ?? "",
     relativePath: m.relativePath,
+    storageClass: m.storageClass,
   };
 }
 
@@ -211,6 +217,7 @@ export function getUppy(): Uppy<AnyMeta, AnyMeta> {
     getUploadParameters: async (file, options) => {
       const meta = readMeta(file);
       const qs = new URLSearchParams({ key: meta.key });
+      if (meta.storageClass) qs.set("storageClass", meta.storageClass);
       const res = await fetch(
         `${urlFor(meta.connectionId, meta.bucket, "presign/upload")}?${qs}`,
         { method: "POST", signal: options?.signal }
@@ -235,8 +242,18 @@ export function getUppy(): Uppy<AnyMeta, AnyMeta> {
       // resumeUploadFile() → listParts() instead of calling here at all. So
       // this path only runs for fresh uploads; always mint a new uploadId.
       const meta = readMeta(file);
-      const res = await fetch(
+      const startUrl = new URL(
         urlFor(meta.connectionId, meta.bucket, "multipart/start"),
+        // URL needs an absolute base; the protocol/host are stripped before
+        // fetch sees the result (we only use it for stable query-string
+        // composition with proper encoding).
+        window.location.origin
+      );
+      if (meta.storageClass) {
+        startUrl.searchParams.set("storageClass", meta.storageClass);
+      }
+      const res = await fetch(
+        `${startUrl.pathname}${startUrl.search}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

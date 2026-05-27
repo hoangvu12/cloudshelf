@@ -18,6 +18,7 @@ import {
   PutObjectCommand,
   PutObjectTaggingCommand,
   S3Client,
+  type StorageClass,
   UploadPartCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
@@ -311,13 +312,27 @@ export async function presignSingleUpload(
   conn: S3Connection,
   bucket: string,
   key: string,
-  expiresSeconds: number = PRESIGN_TTL_SECONDS
+  expiresSeconds: number = PRESIGN_TTL_SECONDS,
+  storageClass?: string
 ): Promise<PresignedUrl> {
   const client = createS3Client(conn);
   try {
+    // StorageClass is baked into the signed URL as an `x-amz-storage-class`
+    // query parameter — the browser PUTs to the URL unchanged and S3 honors
+    // the class without the client needing to set a separate header. Backends
+    // that don't recognize the class typically store as STANDARD anyway, so
+    // the upload still succeeds (per Phase 9 acceptance criteria).
     const url = await getSignedUrl(
       client,
-      new PutObjectCommand({ Bucket: bucket, Key: key }),
+      new PutObjectCommand({
+        Bucket: bucket,
+        Key: key,
+        // SDK types StorageClass as a string-literal union; we accept any
+        // string at the route boundary (some S3-compatibles ship custom
+        // classes) and cast through here. Wire-level invalid values surface
+        // as an upstream 400 via the 502 envelope.
+        StorageClass: storageClass as StorageClass | undefined,
+      }),
       { expiresIn: expiresSeconds }
     );
     return {
@@ -345,7 +360,8 @@ export async function createMultipartUpload(
   conn: S3Connection,
   bucket: string,
   key: string,
-  contentType: string | undefined
+  contentType: string | undefined,
+  storageClass?: string
 ): Promise<{ uploadId: string }> {
   const client = createS3Client(conn);
   try {
@@ -354,6 +370,11 @@ export async function createMultipartUpload(
         Bucket: bucket,
         Key: key,
         ContentType: contentType,
+        // StorageClass is fixed at create time and applies to the assembled
+        // object once CompleteMultipartUpload runs. Backends that don't
+        // recognize the class typically fall back to STANDARD silently.
+        // See the cast note in presignSingleUpload.
+        StorageClass: storageClass as StorageClass | undefined,
       })
     );
     if (!out.UploadId) throw new Error("Backend did not return UploadId");

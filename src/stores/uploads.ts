@@ -18,6 +18,7 @@ import { getUppy, MULTIPART_THRESHOLD, type UploadMeta } from "@/lib/uppy";
 import type { UploadInputFile } from "@/components/upload-dropzone";
 import { fingerprint, getResume } from "@/lib/upload-resume";
 import { usePrefsStore } from "@/stores/prefs";
+import { useUploadSessionStore } from "@/stores/upload-session";
 
 export type UploadStatus =
   | "queued"
@@ -297,6 +298,13 @@ export const useUploadsStore = create<UploadsState>((set) => {
         // user flips the pref mid-upload, files already in flight should
         // keep whatever behavior they were queued with.
         const compressImages = prefs.compressImages;
+        // Same lock-in for storage class: session override beats the
+        // persisted default; either becoming undefined later doesn't perturb
+        // files already queued with a specific class.
+        const sessionStorageClass =
+          useUploadSessionStore.getState().storageClass;
+        const storageClass =
+          sessionStorageClass ?? prefs.defaultStorageClass ?? undefined;
         for (const { file, relativePath } of items) {
           // Treat the relativePath as authoritative — for top-level drops it's
           // just the filename, for folder drops it carries the full subtree.
@@ -311,6 +319,7 @@ export const useUploadsStore = create<UploadsState>((set) => {
             // same-name files in different subdirs — without it, two files
             // both named img1.jpg would collide on the same Uppy fileID.
             relativePath: safeRelative,
+            storageClass,
             compressImages,
           };
           let id: string;
