@@ -216,6 +216,11 @@ export async function createFolderForConnection(
  * Bulk delete in chunks of 1000 (S3's per-request cap). Per-key errors come
  * back in `errors` and don't throw — the UI surfaces them as warnings while
  * still treating successful deletes as deleted.
+ *
+ * Any input key ending in "/" is treated as a folder prefix: we recursively
+ * list every nested object (including the folder marker itself) before
+ * issuing deletes. S3 has no real folders, so deleting `photos/2025/` alone
+ * would only drop the zero-byte marker and orphan its contents.
  */
 export async function deleteObjectsForConnection(
   conn: S3Connection,
@@ -225,9 +230,38 @@ export async function deleteObjectsForConnection(
   if (keys.length === 0) return { deleted: 0, errors: [] };
   const client = createS3Client(conn);
   try {
+    const allKeys = new Set<string>();
+    const prefixes: string[] = [];
+    for (const k of keys) {
+      if (k.endsWith("/")) prefixes.push(k);
+      else allKeys.add(k);
+    }
+    for (const prefix of prefixes) {
+      let continuationToken: string | undefined;
+      do {
+        const page = await client.send(
+          new ListObjectsV2Command({
+            Bucket: bucket,
+            Prefix: prefix,
+            ContinuationToken: continuationToken,
+          })
+        );
+        for (const o of page.Contents ?? []) {
+          if (o.Key) allKeys.add(o.Key);
+        }
+        continuationToken = page.IsTruncated
+          ? page.NextContinuationToken
+          : undefined;
+      } while (continuationToken);
+      // Ensure the marker is removed even if S3 didn't return it (some
+      // implementations omit zero-byte prefix objects from listings).
+      allKeys.add(prefix);
+    }
+    if (allKeys.size === 0) return { deleted: 0, errors: [] };
+    const merged = Array.from(allKeys);
     const chunks: string[][] = [];
-    for (let i = 0; i < keys.length; i += 1000) {
-      chunks.push(keys.slice(i, i + 1000));
+    for (let i = 0; i < merged.length; i += 1000) {
+      chunks.push(merged.slice(i, i + 1000));
     }
     const responses = await Promise.all(
       chunks.map((chunk) =>
