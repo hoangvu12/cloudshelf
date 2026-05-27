@@ -1,7 +1,8 @@
 import * as React from "react";
-import { ArrowUp, FolderOpen } from "@/lib/icons";
+import { ArrowLeft, ArrowRight, Database } from "@/lib/icons";
 
 import { cn } from "@/lib/utils";
+import { useNavHistory } from "@/lib/nav-history";
 import { prefixAtDepth, prefixSegments } from "@/lib/object-path";
 
 /**
@@ -10,10 +11,9 @@ import { prefixAtDepth, prefixSegments } from "@/lib/object-path";
  * home page so its chrome matches the in-bucket layout). When `bucket` is
  * set, segments inside `prefix` are appended after the bucket name.
  *
- * Up arrow navigates one level up:
- *   - on the home page: disabled
- *   - at the bucket root: navigates back to "/"
- *   - inside a folder: navigates to the parent prefix
+ * Left/right arrows act like a browser's back/forward: they walk the in-app
+ * navigation history tracked by `useNavHistory`, not the breadcrumb tree. To
+ * jump up one level by hierarchy, click an ancestor segment directly.
  */
 export function BreadcrumbPath({
   bucket,
@@ -28,7 +28,7 @@ export function BreadcrumbPath({
   prefix?: string;
   /** Called with the prefix to navigate to (empty string = bucket root). */
   onNavigatePrefix?: (prefix: string) => void;
-  /** Called when the user clicks the "Buckets" root or up-arrows past it. */
+  /** Called when the user clicks the "Buckets" root. */
   onNavigateHome?: () => void;
   className?: string;
 }) {
@@ -39,31 +39,25 @@ export function BreadcrumbPath({
   const atHome = !bucket;
   const atBucketRoot = !!bucket && segments.length === 0;
 
-  const handleUp = () => {
-    if (atHome) return;
-    if (atBucketRoot) {
-      onNavigateHome?.();
-      return;
-    }
-    const parent = prefixAtDepth(segments, segments.length - 2);
-    onNavigatePrefix?.(parent);
-  };
+  const { canBack, canForward, back, forward } = useNavHistory();
 
   return (
     <div className={cn("flex min-w-0 items-center gap-2 font-mono", className)}>
-      <button
-        type="button"
-        onClick={handleUp}
-        disabled={atHome}
-        className="hover:bg-muted text-muted-foreground hover:text-foreground rounded p-1 focus:outline-none disabled:cursor-not-allowed disabled:opacity-40"
-        aria-label="Up one level"
-        title="Up one level"
-      >
-        <ArrowUp className="size-4" />
-      </button>
+      <div className="flex shrink-0 items-center gap-0.5">
+        <NavArrowButton
+          direction="back"
+          disabled={!canBack}
+          onClick={back}
+        />
+        <NavArrowButton
+          direction="forward"
+          disabled={!canForward}
+          onClick={forward}
+        />
+      </div>
 
       <div className="bg-input-bg border-border flex min-w-0 items-center rounded border px-3 py-1 text-xs">
-        <FolderOpen className="text-muted-foreground mr-2 size-3.5 shrink-0" />
+        <Database className="mr-2 size-3.5 shrink-0 text-yellow-300" />
 
         {atHome ? (
           <span className="text-primary-text shrink-0 font-bold">Buckets</span>
@@ -118,5 +112,30 @@ export function BreadcrumbPath({
         })}
       </div>
     </div>
+  );
+}
+
+function NavArrowButton({
+  direction,
+  disabled,
+  onClick,
+}: {
+  direction: "back" | "forward";
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  const Icon = direction === "back" ? ArrowLeft : ArrowRight;
+  const label = direction === "back" ? "Back" : "Forward";
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="hover:bg-muted text-muted-foreground hover:text-foreground rounded p-1 focus:outline-none disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+      aria-label={label}
+      title={label}
+    >
+      <Icon className="size-4" />
+    </button>
   );
 }

@@ -16,6 +16,7 @@ import { EmptyState } from "@/components/empty-state";
 import { useBuckets } from "@/lib/api/buckets";
 import { useConnections } from "@/lib/api/connections";
 import { formatBytes, formatCount } from "@/lib/format";
+import { useTrackNavEntry } from "@/lib/nav-history";
 import { useActiveConnectionStore } from "@/stores/active-connection";
 import { usePinnedBucketsStore } from "@/stores/pinned-buckets";
 import { usePrefsStore } from "@/stores/prefs";
@@ -26,6 +27,7 @@ export const Route = createFileRoute("/")({
 });
 
 function HomePage() {
+  useTrackNavEntry({ kind: "home" });
   const navigate = useNavigate();
   const connectionsQuery = useConnections();
   const connections = connectionsQuery.data ?? [];

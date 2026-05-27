@@ -17,6 +17,7 @@ import {
 import { usePreviewStore } from "@/stores/preview";
 import { useBuckets } from "@/lib/api/buckets";
 import { useConnections } from "@/lib/api/connections";
+import { useTrackNavEntry } from "@/lib/nav-history";
 import { useActiveConnectionStore } from "@/stores/active-connection";
 
 /**
@@ -37,6 +38,8 @@ function BucketPage() {
   // The router gives us the URL fragment as-is — strip any trailing slash so
   // the prefix we hand to the API is canonical (always either "" or "x/y/").
   const prefix = splat ? (splat.endsWith("/") ? splat : splat + "/") : "";
+
+  useTrackNavEntry({ kind: "bucket", bucket, prefix });
 
   const navigate = useNavigate();
   const connectionsQuery = useConnections();

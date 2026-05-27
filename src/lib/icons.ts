@@ -27,6 +27,7 @@ export { default as ChevronLeft } from "@material-symbols/svg-400/outlined/chevr
 export { default as ChevronRight } from "@material-symbols/svg-400/outlined/chevron_right-fill.svg?react";
 export { default as ArrowUp } from "@material-symbols/svg-400/outlined/arrow_upward-fill.svg?react";
 export { default as ArrowLeft } from "@material-symbols/svg-400/outlined/arrow_back-fill.svg?react";
+export { default as ArrowRight } from "@material-symbols/svg-400/outlined/arrow_forward-fill.svg?react";
 export { default as CornerDownRight } from "@material-symbols/svg-400/outlined/subdirectory_arrow_right-fill.svg?react";
 export { default as Home } from "@material-symbols/svg-400/outlined/home-fill.svg?react";
 export { default as Search } from "@material-symbols/svg-400/outlined/search-fill.svg?react";
