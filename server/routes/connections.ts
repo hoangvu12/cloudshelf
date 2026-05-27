@@ -251,14 +251,39 @@ connectionsRoute.post("/:id/buckets/:bucket/objects/copy", async (c) => {
   }
 });
 
-/** Presigned GET URL — browser downloads / shares directly from S3. */
+/**
+ * Presigned GET URL — browser downloads / shares directly from S3.
+ *
+ * `expiresIn` is optional and lets the share dialog pick a longer TTL up to
+ * the SDK ceiling of 7 days. Omit it to keep the historical 15-minute default
+ * so the preview pane and one-click copy keep working unchanged.
+ */
 connectionsRoute.get("/:id/buckets/:bucket/objects/download-url", async (c) => {
   const conn = getConnection(c.req.param("id"));
   if (!conn) return c.json({ error: "Not found" }, 404);
   const key = c.req.query("key");
   if (!key) return c.json({ error: "Missing ?key=" }, 400);
+  const expiresInRaw = c.req.query("expiresIn");
+  let expiresIn: number | undefined;
+  if (expiresInRaw !== undefined) {
+    const parsed = z.coerce
+      .number()
+      .int()
+      .min(60)
+      .max(7 * 24 * 60 * 60)
+      .safeParse(expiresInRaw);
+    if (!parsed.success) {
+      return c.json({ error: "Invalid expiresIn (60..604800)" }, 400);
+    }
+    expiresIn = parsed.data;
+  }
   try {
-    const out = await presignDownloadUrl(conn, c.req.param("bucket"), key);
+    const out = await presignDownloadUrl(
+      conn,
+      c.req.param("bucket"),
+      key,
+      expiresIn
+    );
     return c.json(out);
   } catch (err) {
     return c.json(upstreamError(err), 502);

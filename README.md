@@ -23,7 +23,9 @@ speaks the S3 API.
 - Inline previews for images, video, audio, PDFs, and code. Syntax
   highlighting runs in a web worker with virtualized line rendering,
   so a 3MB JSON doesn't freeze the tab.
-- Presigned share links with a TTL.
+- Presigned share links with a TTL — Alt-click "Copy link" (or use Share…)
+  for a dialog with chips (15m / 1h / 1d / 7d or custom), live countdown,
+  and a QR code.
 - Light, dark, or system theme. Keyboard shortcuts everywhere they make
   sense.
 

@@ -35,6 +35,7 @@ import {
   useUpdateObjectMetadata,
 } from "@/lib/api/object-info";
 import { usePreviewStore } from "@/stores/preview";
+import { useShareStore } from "@/stores/share";
 import { useCopied } from "@/lib/use-copied";
 import {
   Drawer,
@@ -101,6 +102,7 @@ export function FilePreviewPanel({
   }, [openKey, close, next, prev]);
 
   const [copied, flashCopied] = useCopied();
+  const openShare = useShareStore((s) => s.open);
 
   if (!openKey) return null;
 
@@ -137,7 +139,13 @@ export function FilePreviewPanel({
     }
   };
 
-  const handleCopyLink = async () => {
+  const handleCopyLink = async (e: React.MouseEvent) => {
+    // Hold Alt → defer to the share dialog (TTL + QR) instead of the silent
+    // one-shot copy. Same modifier semantics as the toolbar's Copy link.
+    if (e.altKey) {
+      openShare(openKey);
+      return;
+    }
     try {
       const { url } = await fetchDownloadUrl(connectionId, bucket, openKey);
       await navigator.clipboard.writeText(url);
@@ -194,6 +202,7 @@ export function FilePreviewPanel({
             )
           }
           onClick={handleCopyLink}
+          title="Click to copy 15-min link · Alt-click for share options"
           className={copied ? "text-success" : undefined}
         >
           {copied ? "Copied" : "Copy link"}

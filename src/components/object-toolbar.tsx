@@ -9,6 +9,7 @@ import {
   Link as LinkIcon,
   PenLine,
   Search,
+  Share,
   Trash2,
   UploadCloud,
 } from "@/lib/icons";
@@ -41,6 +42,7 @@ export function ObjectToolbar({
   canPreview,
   onDownloadSelected,
   onCopyLink,
+  onShare,
   onMove,
   onRename,
   onDelete,
@@ -62,6 +64,9 @@ export function ObjectToolbar({
   onDownloadSelected: () => void;
   /** Resolves true on successful copy so the button can show inline feedback. */
   onCopyLink: () => Promise<boolean>;
+  /** Opens the share dialog (TTL + QR). Triggered by Alt+click on the Copy
+   *  link button — same single-file constraint as onCopyLink. */
+  onShare: () => void;
   onMove: () => void;
   onRename: () => void;
   onDelete: () => void;
@@ -74,7 +79,12 @@ export function ObjectToolbar({
   const canCopyLink = selectedCount === 1;
 
   const [copied, flashCopied] = useCopied();
-  const handleCopyLinkClick = async () => {
+  const handleCopyLinkClick = async (e: React.MouseEvent) => {
+    // Hold Alt → open the share dialog instead of the silent one-shot copy.
+    if (e.altKey) {
+      onShare();
+      return;
+    }
     const ok = await onCopyLink();
     if (ok) flashCopied();
   };
@@ -120,13 +130,13 @@ export function ObjectToolbar({
           <div className="-mx-2 flex min-w-0 items-center gap-1 overflow-x-auto px-2 font-mono text-xs [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
             <ActionButton
               onClick={onPreview}
-              icon={<Eye className="text-accent-mauve" />}
+              icon={<Eye />}
               disabled={!canPreview}
               title={canPreview ? undefined : "Select a single file"}
             >
               Preview
             </ActionButton>
-            <ActionButton onClick={onDownloadSelected} icon={<Download className="text-accent-green" />}>
+            <ActionButton onClick={onDownloadSelected} icon={<Download />}>
               Download
             </ActionButton>
             <ActionButton
@@ -135,21 +145,37 @@ export function ObjectToolbar({
                 copied ? (
                   <CheckIcon className="text-success" />
                 ) : (
-                  <LinkIcon className="text-accent-sapphire" />
+                  <LinkIcon />
                 )
               }
               disabled={!canCopyLink}
-              title={canCopyLink ? undefined : "Select a single file"}
+              title={
+                canCopyLink
+                  ? "Click to copy 15-min link · Alt-click for share options"
+                  : "Select a single file"
+              }
               className={copied ? "text-success" : undefined}
             >
               {copied ? "Copied" : "Copy link"}
             </ActionButton>
-            <ActionButton onClick={onMove} icon={<FolderOutput className="text-accent-yellow" />}>
+            <ActionButton
+              onClick={onShare}
+              icon={<Share />}
+              disabled={!canCopyLink}
+              title={
+                canCopyLink
+                  ? "Share with custom expiry + QR"
+                  : "Select a single file"
+              }
+            >
+              Share
+            </ActionButton>
+            <ActionButton onClick={onMove} icon={<FolderOutput />}>
               Move
             </ActionButton>
             <ActionButton
               onClick={onRename}
-              icon={<PenLine className="text-muted-foreground" />}
+              icon={<PenLine />}
               disabled={!canRename}
               title={canRename ? undefined : "Select a single item"}
             >
@@ -247,7 +273,7 @@ function ActionButton({
   title,
   className,
 }: {
-  onClick: () => unknown;
+  onClick: (e: React.MouseEvent<HTMLButtonElement>) => unknown;
   icon: React.ReactNode;
   children: React.ReactNode;
   destructive?: boolean;

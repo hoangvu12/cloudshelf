@@ -7,6 +7,7 @@ import {
   FolderOutput,
   Link as LinkIcon,
   PenLine,
+  Share,
   Trash2,
 } from "@/lib/icons";
 
@@ -154,6 +155,13 @@ function MenuItems({
       >
         <LinkIcon />
         Copy link
+      </ContextMenuItem>
+      <ContextMenuItem
+        disabled={isFolder || selectedCount > 1}
+        onSelect={() => onAction(entry, "share")}
+      >
+        <Share />
+        Share
       </ContextMenuItem>
       <ContextMenuSeparator />
       <ContextMenuItem

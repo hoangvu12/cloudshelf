@@ -17,6 +17,7 @@ export type ContextAction =
   | "download"
   | "open-new-tab"
   | "copy-link"
+  | "share"
   | "rename"
   | "move"
   | "copy-to"

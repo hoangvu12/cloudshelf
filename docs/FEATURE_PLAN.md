@@ -160,6 +160,106 @@ resources (`versioning.ts`, `lifecycle.ts`, `cors.ts`, `policy.ts`,
 
 5 (Versioning), 11 (in-browser text editor), 14 (EXIF panel).
 
+### Phase 2 — shipped ✅ (commit `feat(share): TTL + QR share dialog`)
+
+Shipped close to spec. Notable shape:
+
+**Server / API:**
+
+- `server/routes/connections.ts` — `GET /objects/download-url` now accepts an
+  optional `?expiresIn=` (seconds). Validated via `z.coerce.number().int()
+  .min(60).max(604800)` (7-day SDK ceiling); 400 on bad input. Omit it and
+  the route behaves exactly as before (15-min default from
+  `PRESIGN_TTL_SECONDS`), so the preview pane + one-click copy stay unchanged.
+- `presignDownloadUrl` already accepted `expiresSeconds`; no s3.ts change.
+
+**Client:**
+
+- `src/lib/api/objects.ts` — `fetchDownloadUrl` gained optional 4th arg
+  `expiresIn`. Same backwards-compatible default.
+- `src/components/share-dialog.tsx` — new `<ShareDialog>` (radix Dialog,
+  not a vaul drawer; the spec said "small dialog"). TTL chips
+  `15m/1h/1d/7d`, custom seconds input + Apply button, read-only URL with
+  copy-to-clipboard, live "Expires in Xd Yh" countdown, and a QR canvas
+  rendered via `qrcode.toCanvas` on a white-padded square.
+- `src/stores/share.ts` — tiny zustand store (`openKey | open | close`),
+  mirroring `usePreviewStore`. The dialog is mounted once at the route
+  level (`src/routes/buckets.$bucketName.$.tsx`) so any UI surface can
+  trigger it without prop-drilling.
+
+**Entry points:**
+
+- Context menu — kept "Copy link" as the silent fast path; added a
+  separate **"Share"** item (new `Share` material-symbols icon + `share`
+  value on the `ContextAction` union in `src/components/object-list.tsx`).
+  Label is plain "Share" — the spec said "Share…" but the ellipsis reads
+  as truncation in the dense font-mono context menu.
+- Toolbar "Copy link" — **Alt-click** opens the share dialog instead of
+  copying. Required widening `ActionButton`'s `onClick` prop type to
+  receive `React.MouseEvent` so the handler can read `e.altKey`.
+- Toolbar also got a dedicated **"Share"** button (`Share` icon) next to
+  "Copy link" for discoverability — Alt-click alone is too hidden. Same
+  single-file constraint as Copy link.
+- Preview-panel footer "Copy link" — same Alt-click trick; the panel
+  pulls `openShare` from `useShareStore` directly.
+- Title tooltips on both Copy link buttons advertise the modifier:
+  `"Click to copy 15-min link · Alt-click for share options"`.
+- While we were in `object-toolbar.tsx`, the per-icon accent colors on
+  the bulk-action buttons (mauve Eye, green Download, sapphire Link,
+  yellow FolderOutput, muted PenLine) were stripped — icons now inherit
+  `text-foreground` so the row reads as one tonal group. Destructive
+  Delete is the only colored exception, via the `destructive` variant on
+  the button itself. Reuse this restraint for any future bulk-action
+  entries (Phase 4 ZIP, Phase 6 cross-bucket move).
+
+**Deps added:** `qrcode` (1.5.x) + `@types/qrcode`. Vite resolves the
+package's `browser` field (`lib/browser.js`) automatically; we import the
+named `toCanvas` only.
+
+### Conventions earned in Phase 2 — reuse in later phases
+
+**7. Cross-component dialogs go via a tiny zustand store.** When a single
+dialog needs to be triggered from multiple sibling components (ObjectBrowser
++ FilePreviewPanel + future preview-panel sections), don't lift through the
+route as props. Mirror `usePreviewStore` / `useShareStore`: `{ openKey,
+open, close }`, plus a single mount at the route level. Phase 13 (Shelves),
+Phase 18 (protected share links) should reuse this shape.
+
+**8. Alt-modifier on toolbar/footer actions = "show me the full dialog".**
+Fast paths stay one-click; Alt branches to the configurable dialog. Title
+tooltip advertises the modifier. If you add more such actions
+(e.g. download-with-options), follow the same modifier semantics so users
+build muscle memory.
+
+**9. `ActionButton`/`ActionBtn` `onClick` accepts the event.** The toolbar's
+`ActionButton` now types `onClick: (e: React.MouseEvent<HTMLButtonElement>)
+=> unknown`. The file-preview `ActionBtn` already spread `...props` to the
+native button. Either way, handlers can read `e.altKey`, `e.shiftKey` etc.
+when adding modifier behavior.
+
+### Phases unblocked by Phase 2
+
+13 (Public "shelf" galleries) and 18 (password-protected share links) both
+build on the presign-with-TTL plumbing. The `?expiresIn=` route is the
+only piece they actually need from this phase — the dialog itself is
+unrelated.
+
+### Eligibility snapshot (as of Phase 2 ship)
+
+Pickable now, in rough recommend-first order:
+
+- **3** Folder upload (S, no deps)
+- **4** Bulk download as ZIP (S, no deps)
+- **5** Versioning view + restore (M, unblocked by Phase 1)
+- **14** EXIF panel for images (S, unblocked by Phase 1)
+- **9** Storage class on upload (S, no deps)
+- **15** Connection snippet panel (S, no deps)
+- **16** Paste / URL upload (S, no deps)
+- **17** Activity log (S, no deps)
+- **20** Range-GET video player polish (S, no deps)
+- **2-blocked**: 13 (shelves), 18 (protected share links) — now eligible.
+- Heavier M/L: 6, 7, 8, 10, 11, 12, 19.
+
 ---
 
 ## 1. Phase ordering at a glance
@@ -167,7 +267,7 @@ resources (`versioning.ts`, `lifecycle.ts`, `cors.ts`, `policy.ts`,
 | # | Phase                               | Effort | Depends on | Status |
 |---|--------------------------------------|--------|------------|--------|
 | 1 | Object info, metadata, tags panel    | M      | —          | ✅ shipped (see §0.5) |
-| 2 | Share dialog upgrade (TTL + QR)      | S      | —          |        |
+| 2 | Share dialog upgrade (TTL + QR)      | S      | —          | ✅ shipped (see §0.5) |
 | 3 | Folder upload                        | S      | —          |
 | 4 | Bulk download as ZIP                 | S      | —          |
 | 5 | Versioning view + restore            | M      | 1          |

@@ -140,14 +140,21 @@ export function useCopyObject(
   });
 }
 
-/** One-shot helper — not a hook because download/share is a per-click action. */
+/**
+ * One-shot helper — not a hook because download/share is a per-click action.
+ * `expiresIn` (seconds, 60..604800) overrides the server's 15-min default and
+ * is used by the share dialog when the user picks a longer TTL.
+ */
 export function fetchDownloadUrl(
   connectionId: string,
   bucket: string,
-  key: string
+  key: string,
+  expiresIn?: number
 ): Promise<PresignedUrl> {
+  const qs = new URLSearchParams({ key });
+  if (expiresIn !== undefined) qs.set("expiresIn", String(expiresIn));
   return apiFetch<PresignedUrl>(
-    `${basePath(connectionId, bucket)}/objects/download-url?key=${encodeURIComponent(key)}`
+    `${basePath(connectionId, bucket)}/objects/download-url?${qs.toString()}`
   );
 }
 

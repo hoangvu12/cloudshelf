@@ -14,7 +14,9 @@ import {
   CommandPalette,
   useCommandPaletteShortcut,
 } from "@/components/command-palette";
+import { ShareDialog } from "@/components/share-dialog";
 import { usePreviewStore } from "@/stores/preview";
+import { useShareStore } from "@/stores/share";
 import { useBuckets } from "@/lib/api/buckets";
 import { useConnections } from "@/lib/api/connections";
 import { useTrackNavEntry } from "@/lib/nav-history";
@@ -68,6 +70,8 @@ function BucketPage() {
   // there's nothing to show, so the collapsed state is just an empty 0-width
   // slot.
   const previewOpen = usePreviewStore((s) => s.openKey !== null);
+  const shareKey = useShareStore((s) => s.openKey);
+  const closeShare = useShareStore((s) => s.close);
 
   if (connectionsQuery.isLoading) {
     return <ShellWithEmpty />;
@@ -159,6 +163,16 @@ function BucketPage() {
             params: { bucketName: name, _splat: "" },
           })
         }
+      />
+
+      <ShareDialog
+        open={shareKey !== null}
+        onOpenChange={(o) => {
+          if (!o) closeShare();
+        }}
+        connectionId={activeConnection.id}
+        bucket={bucket}
+        objectKey={shareKey}
       />
     </AppShell>
   );

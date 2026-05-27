@@ -61,6 +61,7 @@ export { default as XCircle } from "@material-symbols/svg-400/outlined/cancel-fi
 export { default as Download } from "@material-symbols/svg-400/outlined/download-fill.svg?react";
 export { default as ExternalLink } from "@material-symbols/svg-400/outlined/open_in_new-fill.svg?react";
 export { default as Link } from "@material-symbols/svg-400/outlined/link-fill.svg?react";
+export { default as Share } from "@material-symbols/svg-400/outlined/share-fill.svg?react";
 export { default as Copy } from "@material-symbols/svg-400/outlined/content_copy-fill.svg?react";
 export { default as Edit2 } from "@material-symbols/svg-400/outlined/edit-fill.svg?react";
 export { default as PenLine } from "@material-symbols/svg-400/outlined/edit_note-fill.svg?react";

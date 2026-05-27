@@ -46,6 +46,7 @@ import { isEditableTarget } from "@/lib/shortcuts";
 import { useSelectionStore } from "@/stores/selection";
 import { usePreviewStore } from "@/stores/preview";
 import { usePrefsStore } from "@/stores/prefs";
+import { useShareStore } from "@/stores/share";
 import { onUploadCompleted, useUploadsStore } from "@/stores/uploads";
 import type { S3Entry, S3ObjectEntry } from "@server/types";
 
@@ -80,6 +81,7 @@ export function ObjectBrowser({
   const toggleSelection = useSelectionStore((s) => s.toggle);
   const setManySelected = useSelectionStore((s) => s.setMany);
   const clearSelection = useSelectionStore((s) => s.clear);
+  const openShare = useShareStore((s) => s.open);
 
   // Anchor for shift-click range selection — the last entry the user clicked
   // *without* shift. Reset whenever we navigate to a new prefix so a stale
@@ -560,6 +562,9 @@ export function ObjectBrowser({
         case "copy-link":
           h.handleCopyLink(entry);
           return;
+        case "share":
+          if (entry.type === "object") openShare(entry.key);
+          return;
         case "rename":
           setRenameTarget(entry);
           setRenameOpen(true);
@@ -578,7 +583,7 @@ export function ObjectBrowser({
           return;
       }
     },
-    [handleOpenInNewTab, setManySelected, openPreview]
+    [handleOpenInNewTab, setManySelected, openPreview, openShare]
   );
 
   // ─── Toolbar action delegates ───────────────────────────────────────────
@@ -590,6 +595,11 @@ export function ObjectBrowser({
   const handleCopyLinkFromToolbar = async (): Promise<boolean> => {
     if (selectedEntries.length !== 1) return false;
     return copyEntryLink(selectedEntries[0]!);
+  };
+  const handleShareFromToolbar = () => {
+    const only = selectedEntries.length === 1 ? selectedEntries[0]! : null;
+    if (!only || only.type !== "object") return;
+    openShare(only.key);
   };
   const handlePreviewFromToolbar = () => {
     const only = selectedEntries.length === 1 ? selectedEntries[0]! : null;
@@ -806,6 +816,7 @@ export function ObjectBrowser({
         canPreview={canPreviewFromToolbar}
         onDownloadSelected={handleDownloadSelected}
         onCopyLink={handleCopyLinkFromToolbar}
+        onShare={handleShareFromToolbar}
         onMove={() => setMoveOpen(true)}
         onRename={handleRenameFromToolbar}
         onDelete={() => setDeleteOpen(true)}
