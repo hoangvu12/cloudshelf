@@ -37,10 +37,16 @@ export const MULTIPART_THRESHOLD = 100 * 1024 * 1024;
 export interface UploadMeta {
   connectionId: string;
   bucket: string;
-  /** Full object key (prefix + filename). */
+  /** Full object key (prefix + relativePath). */
   key: string;
   /** Prefix the file is being uploaded *into* — used for query invalidation. */
   prefix: string;
+  /** Path relative to the destination prefix. For top-level drops this is
+   *  just the filename; for folder uploads it preserves the subtree
+   *  (`vacation/img1.jpg`). Surfaced in the upload panel so the user can
+   *  see which subdirectory a row is from, and read by Uppy's
+   *  generateFileID to disambiguate same-name files in different subdirs. */
+  relativePath?: string;
 }
 
 type AnyMeta = Record<string, unknown>;
@@ -55,6 +61,7 @@ function readMeta(file: UppyFile<AnyMeta, AnyMeta>): UploadMeta {
     bucket: m.bucket,
     key: m.key,
     prefix: m.prefix ?? "",
+    relativePath: m.relativePath,
   };
 }
 

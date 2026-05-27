@@ -6,6 +6,7 @@ import {
   Eye,
   FolderOutput,
   FolderPlus,
+  FolderUp,
   Link as LinkIcon,
   PenLine,
   Search,
@@ -36,6 +37,7 @@ export function ObjectToolbar({
   onFilterChange,
   filterInputRef,
   onUpload,
+  onUploadFolder,
   onNewFolder,
   onClearSelection,
   onPreview,
@@ -56,6 +58,9 @@ export function ObjectToolbar({
   /** Exposed so the `/` shortcut can focus this input from the page level. */
   filterInputRef?: React.Ref<HTMLInputElement>;
   onUpload: () => void;
+  /** Triggers the directory picker. Drag-drop of folders works without this
+   *  via the dropzone, but a discoverable button is worth the extra slot. */
+  onUploadFolder: () => void;
   onNewFolder: () => void;
   onClearSelection: () => void;
   onPreview: () => void;
@@ -116,6 +121,14 @@ export function ObjectToolbar({
           <Button onClick={onUpload}>
             <UploadCloud />
             Upload
+          </Button>
+          <Button
+            variant="outline"
+            onClick={onUploadFolder}
+            title="Pick a folder — its full subtree uploads, keys preserve the directory structure"
+          >
+            <FolderUp />
+            Upload folder
           </Button>
           <Button variant="outline" onClick={onNewFolder}>
             <FolderPlus className="text-accent-blue" />

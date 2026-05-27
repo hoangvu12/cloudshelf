@@ -15,6 +15,7 @@
 import { create } from "zustand";
 import type { UppyFile } from "@uppy/core";
 import { getUppy, MULTIPART_THRESHOLD, type UploadMeta } from "@/lib/uppy";
+import type { UploadInputFile } from "@/components/upload-dropzone";
 import { fingerprint, getResume } from "@/lib/upload-resume";
 import { usePrefsStore } from "@/stores/prefs";
 
@@ -41,6 +42,10 @@ export interface UploadItem {
   key: string;
   prefix: string;
   fileName: string;
+  /** Path relative to the destination prefix. Equals `fileName` for top-level
+   *  uploads; for folder uploads it preserves the subdirectory chain so the
+   *  panel can show users where a file is landing. */
+  relativePath: string;
   size: number;
   contentType: string;
   status: UploadStatus;
@@ -63,7 +68,7 @@ interface UploadsState {
   actions: {
     addFiles: (
       target: { connectionId: string; bucket: string; prefix: string },
-      files: File[]
+      items: UploadInputFile[]
     ) => string[];
     retry: (id: string) => void;
     cancel: (id: string) => void;
@@ -178,6 +183,7 @@ function readMeta(file: UppyFile<AnyMeta, AnyMeta>): UploadMeta {
     bucket: m.bucket ?? "",
     key: m.key ?? "",
     prefix: m.prefix ?? "",
+    relativePath: m.relativePath,
   };
 }
 
@@ -207,13 +213,15 @@ function toItem(file: UppyFile<AnyMeta, AnyMeta>): UploadItem {
       : err && typeof err === "object" && "message" in err
         ? String((err as { message: unknown }).message)
         : undefined;
+  const fileName = file.name ?? meta.key.split("/").pop() ?? "file";
   return {
     id: file.id,
     connectionId: meta.connectionId,
     bucket: meta.bucket,
     key: meta.key,
     prefix: meta.prefix,
-    fileName: file.name ?? meta.key.split("/").pop() ?? "file",
+    fileName,
+    relativePath: meta.relativePath ?? fileName,
     size,
     contentType: file.type || "application/octet-stream",
     status,
@@ -280,7 +288,7 @@ export const useUploadsStore = create<UploadsState>((set) => {
     items: {},
     order: [],
     actions: {
-      addFiles: ({ connectionId, bucket, prefix }, files) => {
+      addFiles: ({ connectionId, bucket, prefix }, items) => {
         const ids: string[] = [];
         const norm = prefix && !prefix.endsWith("/") ? `${prefix}/` : prefix;
         const prefs = usePrefsStore.getState();
@@ -289,13 +297,20 @@ export const useUploadsStore = create<UploadsState>((set) => {
         // user flips the pref mid-upload, files already in flight should
         // keep whatever behavior they were queued with.
         const compressImages = prefs.compressImages;
-        for (const file of files) {
-          const key = `${norm}${file.name}`;
+        for (const { file, relativePath } of items) {
+          // Treat the relativePath as authoritative — for top-level drops it's
+          // just the filename, for folder drops it carries the full subtree.
+          const safeRelative = relativePath || file.name;
+          const key = `${norm}${safeRelative}`;
           const meta: UploadMetaIndexed = {
             connectionId,
             bucket,
             key,
             prefix,
+            // Uppy's generateFileID reads meta.relativePath to disambiguate
+            // same-name files in different subdirs — without it, two files
+            // both named img1.jpg would collide on the same Uppy fileID.
+            relativePath: safeRelative,
             compressImages,
           };
           let id: string;

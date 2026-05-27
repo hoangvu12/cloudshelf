@@ -17,7 +17,9 @@ speaks the S3 API.
 - Multiple S3 endpoints in one app. Switch between them from the header.
 - File-manager browsing: virtual folders, breadcrumbs, grid or list
   view, search, sort.
-- Drag-and-drop uploads. Bytes go browser → S3 directly via presigned
+- Drag-and-drop uploads — single files or entire folders. Drag a tree onto
+  the browser (or hit "Upload folder") and the subdirectories are recreated
+  under your current prefix. Bytes go browser → S3 directly via presigned
   URLs, so the server never touches the payload; progress bars are
   honest and your bandwidth isn't doubled. Multipart for big files.
 - Inline previews for images, video, audio, PDFs, and code. Syntax

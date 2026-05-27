@@ -40,6 +40,7 @@ export { default as Pin } from "@material-symbols/svg-400/outlined/keep-fill.svg
 export { default as FolderOpen } from "@material-symbols/svg-400/outlined/folder_open-fill.svg?react";
 export { default as FolderPlus } from "@material-symbols/svg-400/outlined/create_new_folder-fill.svg?react";
 export { default as FolderOutput } from "@material-symbols/svg-400/outlined/drive_file_move-fill.svg?react";
+export { default as FolderUp } from "@material-symbols/svg-400/outlined/drive_folder_upload-fill.svg?react";
 export { default as FolderX } from "@material-symbols/svg-400/outlined/folder_off-fill.svg?react";
 export { default as FileQuestion } from "@material-symbols/svg-400/outlined/quiz-fill.svg?react";
 

@@ -725,11 +725,21 @@ function CompactRow({
 /** TYPE · size · ↳ destination — the standard metadata sub-line shown under
  *  the filename on every row that has room for it. Consolidates what used to
  *  be just the destination, so users can see the file type ("JPEG", "MP4")
- *  and total size at a glance in any state. */
+ *  and total size at a glance in any state.
+ *
+ *  For folder uploads the destination includes the subdirectory chain so
+ *  rows from `vacation/img1.jpg` show as `bucket/prefix/vacation` — that's
+ *  the bit that distinguishes two `img1.jpg` rows landing in sibling
+ *  subfolders of the same upload. */
 function MetaLine({ item, inline = false }: { item: UploadItem; inline?: boolean }) {
   const { label } = fileAppearance(item.fileName);
   const path = trimTrailingSlash(item.prefix);
-  const display = path ? `${item.bucket}/${path}` : item.bucket;
+  // Strip the leaf filename from relativePath to get the in-folder subpath.
+  const subdir = item.relativePath.includes("/")
+    ? item.relativePath.slice(0, item.relativePath.lastIndexOf("/"))
+    : "";
+  const dest = [path, subdir].filter(Boolean).join("/");
+  const display = dest ? `${item.bucket}/${dest}` : item.bucket;
   return (
     <div
       className={cn(

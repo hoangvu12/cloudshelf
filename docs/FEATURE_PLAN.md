@@ -244,20 +244,123 @@ build on the presign-with-TTL plumbing. The `?expiresIn=` route is the
 only piece they actually need from this phase — the dialog itself is
 unrelated.
 
-### Eligibility snapshot (as of Phase 2 ship)
+### Phase 3 — shipped ✅ (commit `feat(uploads): folder drag-drop + picker`)
+
+Shipped close to spec, with one intentional deviation noted below.
+
+**`src/components/upload-dropzone.tsx`:**
+
+- `useFsAccessApi: false` so dropped folders go through file-selector's
+  `webkitGetAsEntry` recursion (without this, a folder drop yields zero
+  files on Chromium).
+- New `openFolderRef` prop alongside the existing `openRef`. A separate
+  hidden `<input type="file" webkitdirectory>` lives inside the dropzone;
+  triggering it via the ref opens the OS folder picker. The two inputs are
+  separate because `webkitdirectory` forces directory-only selection — one
+  input can't accept both files and a folder.
+- `onFiles` callback signature changed: now `onFiles(items:
+  UploadInputFile[])` where `UploadInputFile = { file: File; relativePath:
+  string }`. `relativePath` is normalized from `webkitRelativePath` ||
+  `file.path` (file-selector's leading-slashed field) || `file.name`.
+- Drop-overlay copy updated: "Drop files or folders here to upload".
+
+**`src/lib/uppy.ts`:**
+
+- `UploadMeta` gained optional `relativePath`. **Uppy's
+  `generateFileID` reads `meta.relativePath` natively** (see
+  `node_modules/@uppy/utils/lib/generateFileID.js:26`) to disambiguate
+  same-name files in different subdirs — without setting it, two
+  `img1.jpg` files from sibling subfolders collide on the same Uppy
+  fileID and the second add throws. Free win — no custom ID logic.
+
+**`src/stores/uploads.ts`:**
+
+- `addFiles(target, items: UploadInputFile[])` — signature changed. The
+  S3 key is now built as `${prefix}${relativePath}` instead of
+  `${prefix}${file.name}`, so subdirectories land at the right keys.
+- `UploadItem.relativePath: string` added (required field — top-level
+  uploads fall back to `file.name`, so it's always populated).
+- The Uppy filename passed to `addFile()` stays as `file.name` (clean
+  display in the panel); subdir uniqueness rides entirely on
+  `meta.relativePath`.
+
+**`src/components/object-browser.tsx`:**
+
+- New `openFolderPickerRef` sibling to `openPickerRef`, plumbed through
+  to `<UploadDropzone openFolderRef={…}>` and the toolbar's
+  `onUploadFolder`.
+- `handleUploadFiles` reshaped to take `UploadInputFile[]`. **Overwrite
+  warning narrowed to top-level files only** — for folder uploads, a
+  subdir collision lives under not-yet-loaded prefixes, so prompting
+  about files the user can't see is noise. Filter is
+  `!relativePath.includes("/")`.
+
+**`src/components/object-toolbar.tsx`:**
+
+- New "Upload folder" outline button between "Upload" and "New folder",
+  icon `FolderUp` (Material Symbols `drive_folder_upload`). New
+  `onUploadFolder: () => void` prop on `ObjectToolbar`.
+
+**`src/components/upload-panel.tsx`:**
+
+- `MetaLine` destination now folds the relative subdir into the
+  displayed path so two `img1.jpg` rows in sibling subfolders read as
+  e.g. `bucket/prefix/vacation` vs `bucket/prefix/europe` instead of
+  identical `bucket/prefix`.
+
+**`src/lib/icons.ts`:**
+
+- Added `FolderUp` (Material Symbols `drive_folder_upload-fill`).
+
+**Deviation from spec:** the spec said "Show one progress row per file,
+grouped under a 'folder upload' header (collapsible)". I deliberately
+**skipped the collapsible group header** — instead the relativePath is
+folded into each row's MetaLine destination, which satisfies the "see
+which file went where" need without a structural change to the panel.
+Group headers can be added in a UI-polish follow-up if a noisy run
+warrants them. No dedicated folder-walk helper was needed either —
+react-dropzone's bundled file-selector already does the
+`webkitGetAsEntry` recursion when `useFsAccessApi: false`.
+
+### Conventions earned in Phase 3 — reuse in later phases
+
+**10. Pass `meta.relativePath` to Uppy for any multi-file add where
+sibling-collision is possible.** Uppy's `generateFileID` reads it
+natively; without it, two files with the same name+size+lastModified
+throw a duplicate-add error. The store keeps a parallel `relativePath`
+field on `UploadItem` so the UI can show users where a row is landing.
+Phase 16 (paste / URL upload) should set `relativePath` to the generated
+key's leaf path for the same reason.
+
+**11. Per-input flow for directory-only HTML inputs.** When a feature
+needs `<input webkitdirectory>` (or any other "exclusive" file-input
+attribute), don't try to share the existing dropzone input — render a
+sibling hidden input and expose a second imperative trigger ref. The
+dropzone's drag-drop overlay can advertise *both* paths without touching
+either input element. Same shape any future "Upload from camera"
+(`capture`) or filtered-`accept` shortcuts should reuse.
+
+### Phases unblocked by Phase 3
+
+None directly, but the `UploadInputFile` + `meta.relativePath` plumbing
+is now the canonical "queue a file with an explicit destination subpath"
+API. Phase 16 (paste / URL upload) and Phase 19 (extracting a file from
+a zip) should both push through this same shape so they pick up the
+disambiguation behavior for free.
+
+### Eligibility snapshot (as of Phase 3 ship)
 
 Pickable now, in rough recommend-first order:
 
-- **3** Folder upload (S, no deps)
 - **4** Bulk download as ZIP (S, no deps)
 - **5** Versioning view + restore (M, unblocked by Phase 1)
 - **14** EXIF panel for images (S, unblocked by Phase 1)
 - **9** Storage class on upload (S, no deps)
 - **15** Connection snippet panel (S, no deps)
-- **16** Paste / URL upload (S, no deps)
+- **16** Paste / URL upload (S, no deps — reuse Phase-3 `UploadInputFile`)
 - **17** Activity log (S, no deps)
 - **20** Range-GET video player polish (S, no deps)
-- **2-blocked**: 13 (shelves), 18 (protected share links) — now eligible.
+- **2-blocked**: 13 (shelves), 18 (protected share links) — eligible.
 - Heavier M/L: 6, 7, 8, 10, 11, 12, 19.
 
 ---
@@ -268,7 +371,7 @@ Pickable now, in rough recommend-first order:
 |---|--------------------------------------|--------|------------|--------|
 | 1 | Object info, metadata, tags panel    | M      | —          | ✅ shipped (see §0.5) |
 | 2 | Share dialog upgrade (TTL + QR)      | S      | —          | ✅ shipped (see §0.5) |
-| 3 | Folder upload                        | S      | —          |
+| 3 | Folder upload                        | S      | —          | ✅ shipped (see §0.5) |
 | 4 | Bulk download as ZIP                 | S      | —          |
 | 5 | Versioning view + restore            | M      | 1          |
 | 6 | Cross-bucket copy/move + folder rename | M    | —          |

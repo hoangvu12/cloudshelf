@@ -20,7 +20,7 @@ import {
 import { ObjectGrid } from "@/components/object-grid";
 import type { RowClickModifiers } from "@/components/object-row";
 import { ObjectToolbar } from "@/components/object-toolbar";
-import { UploadDropzone } from "@/components/upload-dropzone";
+import { UploadDropzone, type UploadInputFile } from "@/components/upload-dropzone";
 import { formatBytes, formatCount } from "@/lib/format";
 import {
   basename,
@@ -120,6 +120,10 @@ export function ObjectBrowser({
   // Imperative handle into react-dropzone's file picker so the "Upload" button
   // and dropzone share one entry point.
   const openPickerRef = React.useRef<(() => void) | null>(null);
+  // Sibling handle for the folder picker — `<input webkitdirectory>` can't
+  // share the file input (the attribute forces directory-only selection),
+  // so the dropzone exposes a separate trigger for the toolbar to call.
+  const openFolderPickerRef = React.useRef<(() => void) | null>(null);
 
   // Filter input is rendered inside ObjectToolbar; we hold a ref here so the
   // "/" shortcut can focus it from the page level.
@@ -349,38 +353,48 @@ export function ObjectBrowser({
     });
   }, [connectionId, bucket, prefix, normalizedPrefix, queryClient]);
 
-  const handleUploadFiles = (files: File[]) => {
-    const oversized = files.filter((f) => f.size > MAX_UPLOAD_BYTES);
+  const handleUploadFiles = (items: UploadInputFile[]) => {
+    const oversized = items.filter((it) => it.file.size > MAX_UPLOAD_BYTES);
     if (oversized.length) {
       toast.error(
         `${oversized.length} file${oversized.length === 1 ? "" : "s"} exceed S3's 5 TB per-object limit`
       );
     }
-    let accepted = files.filter((f) => f.size <= MAX_UPLOAD_BYTES);
+    let accepted = items.filter((it) => it.file.size <= MAX_UPLOAD_BYTES);
     if (accepted.length === 0) return;
 
-    // Best-effort overwrite check against the currently-loaded listing.
-    // Doesn't catch collisions in not-yet-fetched pages or other clients
-    // creating keys concurrently, but covers the common case.
+    // Best-effort overwrite check against the currently-loaded listing. Only
+    // applies to *top-level* files — for folder uploads, subdirectory
+    // collisions live under not-yet-loaded prefixes and we'd be asking about
+    // files the user can't see. Folder-vs-folder merges are deferred to S3's
+    // own "last write wins" semantics.
     if (usePrefsStore.getState().overwriteWarning) {
       const existingNames = new Set(
         entries
           .filter((e): e is S3ObjectEntry => e.type === "object")
           .map((e) => basename(e.key))
       );
-      const colliders = accepted.filter((f) => existingNames.has(f.name));
-      if (colliders.length > 0) {
-        const sample = colliders
+      const topLevelColliders = accepted.filter(
+        (it) =>
+          !it.relativePath.includes("/") && existingNames.has(it.file.name)
+      );
+      if (topLevelColliders.length > 0) {
+        const sample = topLevelColliders
           .slice(0, 5)
-          .map((f) => `  • ${f.name}`)
+          .map((it) => `  • ${it.file.name}`)
           .join("\n");
         const more =
-          colliders.length > 5 ? `\n  …and ${colliders.length - 5} more` : "";
+          topLevelColliders.length > 5
+            ? `\n  …and ${topLevelColliders.length - 5} more`
+            : "";
         const ok = window.confirm(
-          `${colliders.length} file${colliders.length === 1 ? "" : "s"} already exist in this folder. Overwrite?\n\n${sample}${more}`
+          `${topLevelColliders.length} file${topLevelColliders.length === 1 ? "" : "s"} already exist in this folder. Overwrite?\n\n${sample}${more}`
         );
         if (!ok) {
-          accepted = accepted.filter((f) => !existingNames.has(f.name));
+          const skip = new Set(topLevelColliders.map((it) => it.file.name));
+          accepted = accepted.filter(
+            (it) => it.relativePath.includes("/") || !skip.has(it.file.name)
+          );
           if (accepted.length === 0) return;
         }
       }
@@ -789,6 +803,7 @@ export function ObjectBrowser({
       prefix={prefix}
       onFiles={handleUploadFiles}
       openRef={openPickerRef}
+      openFolderRef={openFolderPickerRef}
     >
       <div className="border-border bg-background flex h-12 shrink-0 items-center border-b px-4">
         <BreadcrumbPath
@@ -807,6 +822,7 @@ export function ObjectBrowser({
         onFilterChange={setFilter}
         filterInputRef={filterInputRef}
         onUpload={() => openPickerRef.current?.()}
+        onUploadFolder={() => openFolderPickerRef.current?.()}
         onNewFolder={() => setNewFolderOpen(true)}
         onClearSelection={() => {
           clearSelection();
