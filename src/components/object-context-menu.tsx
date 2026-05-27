@@ -5,6 +5,7 @@ import {
   Eye,
   ExternalLink,
   FolderOutput,
+  FolderZip,
   Link as LinkIcon,
   PenLine,
   Share,
@@ -141,6 +142,10 @@ function MenuItems({
       >
         <Download />
         Download
+      </ContextMenuItem>
+      <ContextMenuItem onSelect={() => onAction(entry, "download-zip")}>
+        <FolderZip />
+        Download as ZIP
       </ContextMenuItem>
       <ContextMenuItem
         disabled={isFolder || selectedCount > 1}

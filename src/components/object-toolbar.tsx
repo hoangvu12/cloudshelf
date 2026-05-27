@@ -7,6 +7,7 @@ import {
   FolderOutput,
   FolderPlus,
   FolderUp,
+  FolderZip,
   Link as LinkIcon,
   PenLine,
   Search,
@@ -43,6 +44,7 @@ export function ObjectToolbar({
   onPreview,
   canPreview,
   onDownloadSelected,
+  onDownloadAsZip,
   onCopyLink,
   onShare,
   onMove,
@@ -67,6 +69,8 @@ export function ObjectToolbar({
   /** True when exactly one file (not folder) is selected. */
   canPreview: boolean;
   onDownloadSelected: () => void;
+  /** Stream the selection (files + recursive folders) into a single .zip. */
+  onDownloadAsZip: () => void;
   /** Resolves true on successful copy so the button can show inline feedback. */
   onCopyLink: () => Promise<boolean>;
   /** Opens the share dialog (TTL + QR). Triggered by Alt+click on the Copy
@@ -151,6 +155,13 @@ export function ObjectToolbar({
             </ActionButton>
             <ActionButton onClick={onDownloadSelected} icon={<Download />}>
               Download
+            </ActionButton>
+            <ActionButton
+              onClick={onDownloadAsZip}
+              icon={<FolderZip />}
+              title="Bundle the selection (folders included, recursively) into a single .zip"
+            >
+              Download as ZIP
             </ActionButton>
             <ActionButton
               onClick={handleCopyLinkClick}

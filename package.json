@@ -27,6 +27,7 @@
     "@uppy/golden-retriever": "^5.2.1",
     "@uppy/thumbnail-generator": "^5.1.0",
     "class-variance-authority": "^0.7.1",
+    "client-zip": "^2.5.0",
     "clsx": "^2.1.1",
     "cmdk": "^1.0.4",
     "hono": "^4.12.23",

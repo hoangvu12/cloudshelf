@@ -15,6 +15,7 @@ import type { S3Entry } from "@server/types";
 export type ContextAction =
   | "preview"
   | "download"
+  | "download-zip"
   | "open-new-tab"
   | "copy-link"
   | "share"

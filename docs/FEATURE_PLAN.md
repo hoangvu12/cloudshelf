@@ -348,11 +348,107 @@ API. Phase 16 (paste / URL upload) and Phase 19 (extracting a file from
 a zip) should both push through this same shape so they pick up the
 disambiguation behavior for free.
 
-### Eligibility snapshot (as of Phase 3 ship)
+### Phase 4 — shipped ✅ (commit `feat(objects): bulk download as ZIP`)
+
+Shipped server-changeless per spec. Bytes flow browser ↔ S3 directly via
+the existing `download-url` presigns; only the cheap presign + listing
+round-trips touch our server.
+
+**Dep added:** `client-zip` (2.5.x — zero-dep, ~14 KB, no `@types/*`
+needed because it ships its own `.d.ts`).
+
+**`src/lib/zip-download.ts` (new):**
+
+- `gatherZipEntries(connectionId, bucket, selected, currentPrefix)` —
+  expands a mixed file/folder selection into a flat `ZipEntry[]`. For
+  any selected `S3PrefixEntry` it BFS-walks the existing
+  delimiter-paginated `/objects` route (no server change). Inside-zip
+  paths are stripped relative to `currentPrefix`, so selecting
+  `photos/2025/` while browsing `photos/` produces zip entries like
+  `2025/IMG_4021.jpg` rather than the full key.
+- `downloadEntriesAsZip(connectionId, bucket, entries, filename)` —
+  mints presigned URLs in a 6-worker parallel pool (`PRESIGN_CONCURRENCY`,
+  mirrors the browser's per-host budget), then yields each fetched
+  `Response` into `downloadZip()` from `client-zip` via an async generator.
+  `client-zip` pulls one item at a time, so fetches naturally serialize
+  with no extra throttling needed. The result `.blob()` is handed to a
+  hidden `<a download>` with a deferred 60 s `URL.revokeObjectURL`.
+- `SOFT_WARN_BYTES = 2 GB`, `HARD_CAP_BYTES = 10 GB`, `totalZipBytes()` —
+  exported for the caller's size-cap UX.
+- TTL for ZIP presigns is `60*60` s (1 h) — generous because a 9 GB zip
+  on a slow link can outlast the default 15-min window before the last
+  fetch.
+
+**`src/components/object-browser.tsx`:**
+
+- New `handleDownloadAsZip(targetEntry?)`. With no arg (toolbar path) it
+  uses `selectedEntries`. With an arg (context menu path) it uses the
+  full selection if the right-clicked entry is part of it, otherwise
+  just the right-clicked entry — mirrors how `handleContextAction`
+  already routes per-row "download" vs. bulk "download" for the plain
+  Download item.
+- Toast UX: single sonner toast id walks loading → loading (with byte +
+  count summary) → success/error. Above `SOFT_WARN_BYTES` the toast is
+  dismissed and a `window.confirm` blocks until the user opts in
+  (because the zip buffers in browser memory).
+- Filename: single-folder selection → `${folderName}.zip`; otherwise
+  `${bucket}-YYYY-MM-DD.zip` so the OS Save dialog doesn't keep
+  suggesting the same name.
+
+**`src/components/object-toolbar.tsx`:**
+
+- New `onDownloadAsZip` prop + an `ActionButton` between "Download" and
+  "Copy link". Icon `FolderZip`. Always enabled in selection mode (single
+  file works too — zips one file). Tooltip explains the recursion.
+
+**`src/components/object-context-menu.tsx`:**
+
+- New "Download as ZIP" item (`FolderZip` icon) right after "Download".
+  **Always enabled** — works for files, folders, and multi-selection.
+  This is the only entry point for downloading a folder (the plain
+  "Download" item stays disabled on folders, as before).
+
+**`src/components/object-list.tsx`:**
+
+- `ContextAction` gained `"download-zip"`.
+
+**`src/lib/icons.ts`:**
+
+- Added `FolderZip` (Material Symbols `folder_zip-fill`).
+
+**Deviations from spec:**
+
+- **No streaming `<a download>` via Response body.** Spec called out the
+  "stream via Response body" recipe to dodge the ~2 GB Blob URL ceiling
+  on some browsers. We do the simpler buffered `.blob()` path and gate
+  with the 2 GB soft warn + 10 GB hard cap instead — a true streaming
+  download in-browser needs either StreamSaver (extra dep + service
+  worker) or `showSaveFilePicker` (Chromium-only). The cap-and-warn
+  matches the spec's intent without adding the dep.
+- **Per-host fetch concurrency is 1, not 6.** Spec said "throttle to ~6
+  concurrent" for the S3 GETs; we do 6 concurrent only for the
+  *presign* round-trips and let `client-zip`'s pull-based iterator
+  drive S3 fetches one at a time. Parallel S3 fetches don't help when
+  the bottleneck is the single zip-output stream, and serial fetches
+  keep memory pressure flat.
+
+### Conventions earned in Phase 4 — reuse in later phases
+
+None new — Phase 4 is small enough that nothing it did warrants
+promotion to a numbered convention. The recursive prefix walker in
+`zip-download.ts` is intentionally private; Phase 6 (folder rename) and
+Phase 19 (zip-in-place) both have different recursion shapes (server-side
+for 6, central-directory tail-fetch for 19) so there's no shared helper
+to extract yet.
+
+### Phases unblocked by Phase 4
+
+None directly — Phase 4 was a no-deps leaf.
+
+### Eligibility snapshot (as of Phase 4 ship)
 
 Pickable now, in rough recommend-first order:
 
-- **4** Bulk download as ZIP (S, no deps)
 - **5** Versioning view + restore (M, unblocked by Phase 1)
 - **14** EXIF panel for images (S, unblocked by Phase 1)
 - **9** Storage class on upload (S, no deps)
@@ -372,7 +468,7 @@ Pickable now, in rough recommend-first order:
 | 1 | Object info, metadata, tags panel    | M      | —          | ✅ shipped (see §0.5) |
 | 2 | Share dialog upgrade (TTL + QR)      | S      | —          | ✅ shipped (see §0.5) |
 | 3 | Folder upload                        | S      | —          | ✅ shipped (see §0.5) |
-| 4 | Bulk download as ZIP                 | S      | —          |
+| 4 | Bulk download as ZIP                 | S      | —          | ✅ shipped (see §0.5) |
 | 5 | Versioning view + restore            | M      | 1          |
 | 6 | Cross-bucket copy/move + folder rename | M    | —          |
 | 7 | Lifecycle rules editor               | M      | —          |
