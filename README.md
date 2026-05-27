@@ -1,54 +1,56 @@
 # CloudShelf
 
-A self-hosted, single-user web app for managing S3-compatible storage —
-buckets, folders, uploads, downloads, previews, presigned links — for any
-S3 endpoint (MinIO, R2, AWS, [telegram-s3](https://github.com/hoangvu12/telegram-s3),
-…).
+![CloudShelf — bucket file listing](docs/screenshot.png)
 
-Live demo: <https://files.nguyenvu.dev>
+A self-hosted file browser for S3-compatible storage. One user, one
+password, your buckets. Works with MinIO, R2, AWS, Backblaze, Wasabi,
+[telegram-s3](https://github.com/hoangvu12/telegram-s3) — anything that
+speaks the S3 API.
 
-> ⚠️ **Single-user.** One username + password (from env vars), signed-cookie
-> session. S3 credentials sit in plaintext SQLite. Safe to expose behind
-> HTTPS, but a reverse-proxy auth layer (Cloudflare Access, Authelia, …)
-> on top is still a good idea for anything public-facing.
+> Heads up: single-user only. One env-var login, signed-cookie session,
+> S3 credentials sitting as plaintext in SQLite. Fine behind HTTPS, but
+> if you put it on the public internet I'd still want Cloudflare Access
+> or Authelia in front of it.
 
 ## What it does
 
-- **Multi-connection** — keep profiles for several S3 endpoints, switch
-  between them from the header.
-- **Browse buckets** like a file manager: virtual folders, breadcrumbs,
-  grid or list view, search, sort.
-- **Upload** — drag-and-drop, parallel uploads, real progress.
-  Multipart for big files. Bytes go browser → S3 directly via presigned
-  URLs (the server never proxies the payload), so progress is honest and
-  bandwidth isn't doubled.
-- **Previews** — images, video, audio, PDFs, and syntax-highlighted text
-  via Shiki without downloading the whole object.
-- **Presigned share links** with a configurable TTL.
-- **Light / dark / system theme**, rounded shadcn UI, keyboard-friendly.
+- Multiple S3 endpoints in one app. Switch between them from the header.
+- File-manager browsing: virtual folders, breadcrumbs, grid or list
+  view, search, sort.
+- Drag-and-drop uploads. Bytes go browser → S3 directly via presigned
+  URLs, so the server never touches the payload; progress bars are
+  honest and your bandwidth isn't doubled. Multipart for big files.
+- Inline previews for images, video, audio, PDFs, and code. Syntax
+  highlighting runs in a web worker with virtualized line rendering,
+  so a 3MB JSON doesn't freeze the tab.
+- Presigned share links with a TTL.
+- Light, dark, or system theme. Keyboard shortcuts everywhere they make
+  sense.
 
 ## Stack
 
-- **Frontend** — Vite 6 + React 19 + TypeScript (strict), TanStack
-  Router (file-based) + TanStack Query 5, Tailwind v4, shadcn/ui,
-  Zustand, Shiki.
-- **Backend** — Bun + Hono on `:3001`. `bun:sqlite` for the connection
-  store. `@aws-sdk/client-s3` runs server-only and only mints presigns +
-  handles control-plane calls.
-- **One process in prod** — `bun run start` serves `/api/*` and the
-  built SPA on the same port.
+Frontend is Vite 6, React 19, TypeScript (strict), TanStack Router +
+Query, Tailwind v4, shadcn/ui, Zustand, Shiki.
+
+Backend is Bun + Hono on `:3001`. `bun:sqlite` holds the connection
+store. `@aws-sdk/client-s3` runs server-only and only mints presigns
+plus a few control-plane calls.
+
+In production, one process does both: `bun run start` serves `/api/*`
+and the built SPA on the same port.
 
 ## Quick start (local)
 
 ```bash
 bun install
 cp .env.example .env       # then edit CLOUDSHELF_USERNAME / PASSWORD
-bun run dev                # API :3001 + Vite :5173 (concurrently)
+bun run dev                # API on :3001, Vite on :5173
 ```
 
 Open <http://localhost:5173>, sign in with the credentials from `.env`,
-then click **Add connection** and point it at any S3-compatible
-endpoint. CloudShelf probes the credentials before saving.
+hit **Add connection**, and point it at any S3-compatible endpoint.
+CloudShelf probes the credentials before saving so you find out about
+typos immediately.
 
 ### Other scripts
 
@@ -65,17 +67,17 @@ bun run start        # NODE_ENV=production bun server/index.ts
 
 | Var | Default | What it does |
 |---|---|---|
-| `CLOUDSHELF_USERNAME` | — | **Required.** Login username. |
-| `CLOUDSHELF_PASSWORD` | — | **Required.** Login password (compared timing-safely). |
+| `CLOUDSHELF_USERNAME` | — | Required. Login username. |
+| `CLOUDSHELF_PASSWORD` | — | Required. Login password, timing-safe compare. |
 | `PORT` | `3001` | Server port (API + SPA in prod) |
-| `CLOUDSHELF_DB` | `./data/cloudshelf.db` | SQLite file location — mount a volume here in prod |
+| `CLOUDSHELF_DB` | `./data/cloudshelf.db` | SQLite file location; mount a volume here in prod |
 | `CLOUDSHELF_API` | `http://localhost:3001` | Vite dev proxy target |
 | `NODE_ENV` | — | Set to `production` to enable static SPA serving |
 
-The server refuses to start if `CLOUDSHELF_USERNAME` or `CLOUDSHELF_PASSWORD`
-is missing. The session HMAC secret is auto-generated on first run and
-persisted in the SQLite `meta` table, so sessions survive restarts without
-a separate env var.
+The server won't start without `CLOUDSHELF_USERNAME` and
+`CLOUDSHELF_PASSWORD`. The session HMAC secret generates itself on
+first run and lives in the SQLite `meta` table, so sessions survive
+restarts without another env var.
 
 ## Deploy
 
@@ -92,44 +94,44 @@ docker run -d \
   cloudshelf
 ```
 
-Mount `/app/data` to a volume — that's where `cloudshelf.db` lives. The
-container exits immediately if `CLOUDSHELF_USERNAME` / `CLOUDSHELF_PASSWORD`
-are missing.
+Mount `/app/data` to a volume; that's where `cloudshelf.db` lives. The
+container exits immediately if the username/password env vars are
+missing.
 
 ### Easypanel
 
-1. Create an **App** service from this GitHub repo.
-2. Build type: **Dockerfile**.
-3. Add **environment variables**: `CLOUDSHELF_USERNAME` and
-   `CLOUDSHELF_PASSWORD`.
-4. Add a **volume mount**: name `cloudshelf-data`, path `/app/data`.
-5. Add a **domain** pointing at internal port `3001` (HTTPS on).
+1. Create an App service from this repo.
+2. Build type: Dockerfile.
+3. Set env vars `CLOUDSHELF_USERNAME` and `CLOUDSHELF_PASSWORD`.
+4. Add a volume mount: name `cloudshelf-data`, path `/app/data`.
+5. Add a domain pointing at internal port `3001`, HTTPS on.
 
-The included `Dockerfile` is the multi-stage build Easypanel will pick
-up automatically.
+The Dockerfile in the repo is multi-stage; Easypanel picks it up
+automatically.
 
 ### Behind a reverse proxy
 
-Front it with Caddy / nginx / Cloudflare / Traefik for TLS. The built-in
-login is enough for one user; layering Cloudflare Access / Authelia /
-basic auth on top adds MFA, SSO, and shifts brute-force protection off
-the app — worth it for anything public-facing.
+Front it with Caddy, nginx, Cloudflare, or Traefik for TLS. The
+built-in login is enough for one user, but layering Cloudflare Access
+or Authelia on top adds MFA + SSO and pushes brute-force protection
+off the app. Worth it for anything public-facing.
 
 ## Connecting to telegram-s3
 
 CloudShelf was built alongside [telegram-s3](https://github.com/hoangvu12/telegram-s3)
-but isn't coupled to it. To connect:
+but doesn't depend on it. The settings to enter:
 
 | Field | Value |
 |---|---|
-| Endpoint | `http://localhost:9000` (or your telegram-s3 URL) |
-| Region | `us-east-1` (anything works — required by SDK) |
+| Endpoint | `http://localhost:9000` (or wherever your telegram-s3 lives) |
+| Region | `us-east-1` (anything works; the SDK just requires one) |
 | Access key | telegram-s3 access key |
 | Secret key | telegram-s3 secret key |
-| Force path-style | ✅ on |
+| Force path-style | on |
 
-The same setup works for **MinIO**, **Cloudflare R2** (use `<account>.r2.cloudflarestorage.com`),
-**AWS S3** (leave endpoint blank), **Backblaze B2 S3**, **Wasabi**, etc.
+Same fields work for MinIO, Cloudflare R2 (endpoint is
+`<account>.r2.cloudflarestorage.com`), AWS S3 (leave endpoint blank),
+Backblaze B2 S3, Wasabi, etc.
 
 ## Project layout
 
@@ -145,7 +147,7 @@ server/                     # Bun + Hono API
     ├── auth.ts             # /api/auth/login, /logout, /me
     └── connections.ts
 
-src/                        # Vite SPA — browser only, never imports AWS SDK
+src/                        # Vite SPA, browser only, never imports AWS SDK
 ├── main.tsx
 ├── styles.css              # Tailwind v4 + oklch theme tokens
 ├── routes/                 # TanStack Router (file-based)
@@ -156,14 +158,15 @@ src/                        # Vite SPA — browser only, never imports AWS SDK
 │   ├── settings.tsx
 │   └── buckets.$bucketName.$.tsx
 ├── components/
-│   ├── ui/                 # shadcn primitives (rounded-2xl retheme)
-│   ├── pill-nav.tsx
-│   ├── form-section.tsx
+│   ├── ui/                 # shadcn primitives (rounded-2xl, h-12)
+│   ├── file-preview-panel.tsx
+│   ├── object-list.tsx
 │   └── …
 ├── lib/
 │   ├── api/                # apiFetch + React Query hooks
-│   ├── query.ts
-│   └── utils.ts
+│   ├── highlighter.ts      # Shiki worker client
+│   ├── highlighter.worker.ts
+│   └── …
 └── stores/                 # Zustand
     ├── active-connection.ts
     ├── prefs.ts
@@ -171,6 +174,7 @@ src/                        # Vite SPA — browser only, never imports AWS SDK
     └── uploads.ts
 
 data/                       # cloudshelf.db lives here (gitignored)
+docs/                       # README assets
 Dockerfile                  # multi-stage build for prod
 ```
 
@@ -183,28 +187,30 @@ Dockerfile                  # multi-stage build for prod
 `server/index.ts`, types in `server/types.ts`, React Query hooks in
 `src/lib/api/<resource>.ts`.
 
-**shadcn component** —
+**shadcn component**:
+
 ```bash
 bunx --bun shadcn@latest add <component> --yes
 ```
-Note: primitives in `src/components/ui/` are themed (rounded-2xl, h-12
-inputs, `subtle`/`pill` Button variants). Re-adding a primitive will
-overwrite the retheme — diff before committing. On Windows the CLI
-occasionally writes literal `@/...` paths; if an `@` folder appears at
+
+Primitives in `src/components/ui/` are retheme'd (rounded-2xl, h-12
+inputs, `subtle`/`pill` Button variants). Re-adding a primitive
+overwrites the retheme, so diff before committing. On Windows the CLI
+sometimes writes literal `@/...` paths; if an `@` folder shows up at
 the repo root, move its contents into `src/` and delete it.
 
 ## Security notes
 
-- **Login is enforced.** Username/password from env vars, signed
-  HttpOnly cookie, 30-day session, timing-safe compare. Server refuses
-  to start without `CLOUDSHELF_USERNAME` and `CLOUDSHELF_PASSWORD`.
-- **S3 credentials are plaintext** in `data/cloudshelf.db` — keep that
-  file out of backups/syncs you don't trust. `data/` is gitignored.
-- The browser never sees S3 credentials. Presigned URLs are minted with
-  short TTLs and scoped to a single operation.
-- Cookies are marked `Secure` when accessed over HTTPS (detected per
-  request via the scheme or `X-Forwarded-Proto`), so put it behind TLS
-  if you expose it beyond `localhost`.
+- Login is enforced. Username/password from env vars, signed HttpOnly
+  cookie, 30-day session, timing-safe compare. Server won't start
+  without `CLOUDSHELF_USERNAME` and `CLOUDSHELF_PASSWORD`.
+- S3 credentials are plaintext in `data/cloudshelf.db`. Keep that file
+  out of backups and syncs you don't trust; `data/` is gitignored.
+- The browser never sees S3 credentials. Presigned URLs are minted
+  with short TTLs and scoped to one operation.
+- Cookies get the `Secure` flag when the request is over HTTPS
+  (detected via scheme or `X-Forwarded-Proto`), so put it behind TLS
+  if you expose it past `localhost`.
 
 ## License
 
